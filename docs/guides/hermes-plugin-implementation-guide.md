@@ -190,9 +190,17 @@ PromptForge governance ready agent=penn …
 1. In PromptForge Act policy, ensure a tool the agent might call is **not granted** (or omit it → unknown → deny).  
 2. **Publish**.  
 3. In Hermes chat, ask the agent to use that tool.  
-4. Expect a tool error containing `PromptForge denied` — the executor must **not** run.
+4. Expect a tool error starting with `🚫 TOOL BLOCKED BY PROMPTFORGE`, including **What to do:** steps and a link to Admin → AI Governance — the executor must **not** run.
 
-### 5.4 Activity in PromptForge
+### 5.4 UX when PromptForge is not configured
+
+If the plugin is enabled but the account/package/credentials are missing:
+
+1. On the first LLM turn, Hermes receives a **status context**: `PromptForge governance status: NOT READY — tool calling is blocked` with setup steps.  
+2. Any tool call returns a structured block message (setup vs policy) telling the user exactly what to fix.  
+3. Chat still works for conversation-only turns; tools stay fail-closed.
+
+### 5.5 Activity in PromptForge
 
 Admin → AI Governance → profile → **Activity** should show pack/bundle pulls after session start / refresh.
 

@@ -1,0 +1,81 @@
+{
+  "agent_key": "leo",
+  "display_name": "Leo — Kingdom Marketing AI",
+  "digital_worker_email": "leo@agents.brilliantperspectives.com",
+  "platform": "brilliant_central",
+  "default_tier": "velocity",
+  "tools": {
+    "calendar.get_events": {
+      "tier": "velocity",
+      "requires_approval": false,
+      "granted": true
+    },
+    "calendar.create_event": {
+      "tier": "efficiency",
+      "requires_approval": true,
+      "granted": true
+    },
+    "calendar.update_event": {
+      "tier": "efficiency",
+      "requires_approval": true,
+      "granted": true
+    },
+    "campaign.get_clarity_insights": {
+      "tier": "velocity",
+      "requires_approval": false,
+      "granted": true
+    },
+    "campaign.refresh_ad_data": {
+      "tier": "velocity",
+      "requires_approval": false,
+      "granted": true
+    },
+    "funnel.analytics_read": {
+      "tier": "velocity",
+      "requires_approval": false,
+      "granted": true
+    },
+    "funnel.create": {
+      "tier": "velocity",
+      "requires_approval": false,
+      "granted": true
+    },
+    "funnel.generate_page": {
+      "tier": "velocity",
+      "requires_approval": false,
+      "granted": true
+    },
+    "funnel.regenerate_step": {
+      "tier": "velocity",
+      "requires_approval": false,
+      "granted": true
+    },
+    "funnel.publish": {
+      "tier": "efficiency",
+      "requires_approval": true,
+      "granted": true
+    },
+    "funnel.update_checkout_config": {
+      "tier": "efficiency",
+      "requires_approval": true,
+      "granted": true
+    }
+  },
+  "tool_categories": {
+    "calendar.read": {
+      "tier": "velocity",
+      "requires_approval": false,
+      "granted": true
+    },
+    "calendar.write": {
+      "tier": "efficiency",
+      "requires_approval": true,
+      "granted": true
+    },
+    "analytics.read": {
+      "tier": "velocity",
+      "requires_approval": false,
+      "granted": true
+    }
+  }
+}

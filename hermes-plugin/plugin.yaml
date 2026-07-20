@@ -1,0 +1,12 @@
+name: promptforge-governance
+version: 0.1.0
+description: Enforce PromptForge Act policy on every Hermes tool call (PEP — not SOUL text)
+author: PromptForge / i49 Group
+requires_env:
+  - PF_BASE_URL
+  - PF_SERVICE_TOKEN
+  - PF_BUNDLE_VERIFY_KEY
+  - PF_AGENT_KEY
+provides:
+  hooks: true
+  tools: false

@@ -31,41 +31,24 @@ If the host never reaches the executor on deny, “ignore PromptForge” does no
 |-------|----------|
 | [AI Governance Configuration Guide](docs/guides/ai-governance-configuration-guide.md) | Org admins — configure packages in PromptForge |
 | [Import example JSON](docs/guides/ai-governance-package-import.example.json) | Appendix — paste into New package |
-| [Hermes plugin](docs/hermes.md) | Operators — install Act enforcement on Hermes |
+| [Hermes Plugin Implementation Guide](docs/guides/hermes-plugin-implementation-guide.md) | Operators — **install & verify** Act enforcement on Hermes |
+| [Hermes overview](docs/hermes.md) | Short pointer to the install guide |
 
-## Quick start (Hermes)
+## Quick start (Hermes Agent)
 
 ```bash
-pnpm add @promptforge/plugin-hermes
-# peer: @promptforge/governance-pdp
+git clone https://github.com/i49-group/promptforge-governance.git
+cd promptforge-governance
+hermes plugins install ./hermes-plugin --enable
+# set PF_BASE_URL, PF_SERVICE_TOKEN, PF_BUNDLE_VERIFY_KEY, PF_AGENT_KEY
 ```
 
-```ts
-import { createHermesGovernancePlugin } from '@promptforge/plugin-hermes';
+Full steps, fleet profiles, deny proof, troubleshooting:
 
-const gov = createHermesGovernancePlugin({
-  baseUrl: process.env.PF_BASE_URL!,
-  token: process.env.PF_SERVICE_TOKEN!,
-  verifyKey: process.env.PF_BUNDLE_VERIFY_KEY!,
-  agentKey: 'penn',
-  environment: 'production',
-});
+→ **[Hermes Plugin Implementation Guide](docs/guides/hermes-plugin-implementation-guide.md)**
 
-await gov.start();
-
-// BEFORE every tool execute:
-const gate = await gov.beforeToolCall({
-  toolName: 'email.schedule_campaign',
-  correlationId: 'corr_…',
-});
-if (gate.decision === 'deny') throw new Error(gate.message);
-if (gate.decision === 'require_approval') {
-  /* your human approval UX */
-}
-// allow → run your existing tool executor only
-```
-
-See [`examples/hermes-minimal`](examples/hermes-minimal) and [`docs/hermes.md`](docs/hermes.md).
+Native plugin: [`hermes-plugin/`](hermes-plugin/) (Python `pre_tool_call` → `{"action":"block",…}`).  
+Node/TypeScript hosts: [`packages/plugin-hermes`](packages/plugin-hermes).
 
 ## Environment
 

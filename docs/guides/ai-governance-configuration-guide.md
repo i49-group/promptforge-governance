@@ -195,8 +195,8 @@ Base URL (production): `https://www.mypromptforge.com`
 
 SOUL / Talk text is **not** enough — agents can be told to ignore it. Install the Hermes PEP plugin so tools cannot run without `evaluate`:
 
-- Guide: [`docs/hermes.md`](../hermes.md)
-- Package: `@promptforge/plugin-hermes` (this repository)
+- **Install guide:** [Hermes Plugin Implementation Guide](./hermes-plugin-implementation-guide.md)
+- Native plugin: [`hermes-plugin/`](../../hermes-plugin/) (`hermes plugins install ./hermes-plugin --enable`)
 
 OpenClaw and other hosts follow the same pattern (thin plugin over the shared PDP).
 
@@ -274,7 +274,7 @@ No. Publish is Act only.
 Personal = human-in-the-loop IDE. Service = company backend. Use service for production.
 
 **Where do engineers install Hermes enforcement?**  
-[`docs/hermes.md`](../hermes.md) and `@promptforge/plugin-hermes` in this repository.
+[Hermes Plugin Implementation Guide](./hermes-plugin-implementation-guide.md).
 
 **Can I re-import JSON later to overwrite Act?**  
 Not as a bulk replace today. After create, change Act in the UI (draft → Publish). For a brand-new `agent_key`, import again via New package.

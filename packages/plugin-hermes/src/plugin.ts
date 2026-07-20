@@ -1,5 +1,5 @@
 import { createGovernancePdp } from '@promptforge/governance-pdp';
-import type { EvaluateResult } from '@promptforge/governance-pdp';
+import { gateMessage } from './messages';
 import {
   GovernanceDeniedError,
   type HermesGovernancePlugin,
@@ -16,16 +16,6 @@ const ASSEMBLY_ORDER = [
   'operational',
   'knowledge',
 ] as const;
-
-function gateMessage(result: EvaluateResult, toolName: string): string {
-  if (result.decision === 'allow') {
-    return `PromptForge allowed ${toolName} (bundle ${result.bundle_version})`;
-  }
-  if (result.decision === 'require_approval') {
-    return `PromptForge requires approval for ${toolName} (bundle ${result.bundle_version}): ${result.reasons.join(', ')}`;
-  }
-  return `PromptForge denied ${toolName} (bundle ${result.bundle_version}): ${result.reasons.join(', ')}`;
-}
 
 export function createHermesGovernancePlugin(
   options: HermesGovernancePluginOptions
@@ -61,7 +51,7 @@ export function createHermesGovernancePlugin(
     const base: ToolGateResult = {
       decision: result.decision,
       proceed: false,
-      message: gateMessage(result, toolName),
+      message: gateMessage(result, toolName, agentKey),
       evaluate: result,
       bundleVersion: result.bundle_version,
       pdpState: result.pdp_state,
@@ -88,7 +78,11 @@ export function createHermesGovernancePlugin(
         ...base,
         decision: 'deny',
         proceed: false,
-        message: `PromptForge approval denied for ${toolName} (bundle ${result.bundle_version})`,
+        message: gateMessage(
+          { ...result, decision: 'deny', reasons: ['approval_denied'] },
+          toolName,
+          agentKey
+        ),
       };
     }
 

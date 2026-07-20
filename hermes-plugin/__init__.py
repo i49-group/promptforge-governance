@@ -18,8 +18,10 @@ from typing import Any, Optional
 
 try:
     from .pdp import GovernancePdp, PdpError
+    from . import messages as msg
 except ImportError:  # loaded as flat plugin directory on sys.path
     from pdp import GovernancePdp, PdpError  # type: ignore
+    import messages as msg  # type: ignore
 
 logger = logging.getLogger("promptforge.governance")
 
@@ -28,7 +30,16 @@ _lock = threading.Lock()
 _refresh_stop = threading.Event()
 _refresh_thread: Optional[threading.Thread] = None
 
+# Session UX state — drives pre_llm_call warning when Act is not loaded
+_governance_ready = False
+_last_setup_error: Optional[str] = None
+_warned_user = False
+
 DEFAULT_REFRESH_SECONDS = 600
+
+
+def _agent_key_label() -> str:
+    return (os.environ.get("PF_AGENT_KEY") or "unknown").strip().lower() or "unknown"
 
 
 def _env(name: str, default: Optional[str] = None) -> str:
@@ -54,16 +65,35 @@ def _get_pdp() -> GovernancePdp:
         return _pdp
 
 
+def _mark_ready(meta: dict) -> None:
+    global _governance_ready, _last_setup_error, _warned_user
+    _governance_ready = True
+    _last_setup_error = None
+    _warned_user = False
+    logger.info(
+        "PromptForge governance ready agent=%s pack=%s bundle=%s state=%s",
+        _get_pdp().agent_key,
+        meta.get("pack_version"),
+        meta.get("bundle_version"),
+        meta.get("state"),
+    )
+
+
+def _mark_not_ready(exc: BaseException | str) -> None:
+    global _governance_ready, _last_setup_error, _warned_user
+    _governance_ready = False
+    _last_setup_error = str(exc)
+    _warned_user = False
+    logger.error("PromptForge governance not ready: %s", exc)
+
+
 def _refresh_loop(interval_s: float) -> None:
     while not _refresh_stop.wait(interval_s):
         try:
-            _get_pdp().refresh()
-            logger.info(
-                "PromptForge bundle refreshed (version=%s state=%s)",
-                _get_pdp().bundle_version,
-                _get_pdp().state,
-            )
+            meta = _get_pdp().refresh()
+            _mark_ready(meta)
         except Exception as exc:  # noqa: BLE001 — never crash Hermes
+            _mark_not_ready(exc)
             logger.warning("PromptForge refresh failed: %s", exc)
 
 
@@ -86,18 +116,14 @@ def _start_refresh_loop() -> None:
 
 def on_session_start(**kwargs: Any) -> None:
     """Load pack+bundle at session start; fail-closed on later tool calls if this fails."""
+    global _warned_user
+    _warned_user = False
     try:
         meta = _get_pdp().refresh()
-        logger.info(
-            "PromptForge governance ready agent=%s pack=%s bundle=%s state=%s",
-            _get_pdp().agent_key,
-            meta.get("pack_version"),
-            meta.get("bundle_version"),
-            meta.get("state"),
-        )
+        _mark_ready(meta)
         _start_refresh_loop()
     except Exception as exc:  # noqa: BLE001
-        logger.error("PromptForge session refresh failed: %s", exc)
+        _mark_not_ready(exc)
 
 
 def pre_tool_call(
@@ -107,28 +133,25 @@ def pre_tool_call(
     **kwargs: Any,
 ) -> Optional[dict]:
     """
-    PEP gate. Returns Hermes block directive when Act denies / requires approval
-    (approval without host UX is treated as block — fail-closed).
+    PEP gate. Returns Hermes block directive with clear user-facing next steps.
     """
+    agent = _agent_key_label()
     name = (tool_name or kwargs.get("name") or "").strip()
     if not name:
-        return {
-            "action": "block",
-            "message": "PromptForge denied: missing tool_name",
-        }
+        return {"action": "block", "message": msg.block_missing_tool_name(agent)}
 
     try:
         pdp = _get_pdp()
         if pdp.bundle is None:
-            # Attempt one refresh before fail-closed
             try:
-                pdp.refresh()
+                meta = pdp.refresh()
+                _mark_ready(meta)
             except Exception as exc:  # noqa: BLE001
+                _mark_not_ready(exc)
                 return {
                     "action": "block",
-                    "message": (
-                        f"PromptForge deny (no policy bundle): {exc}. "
-                        "Publish Act in PromptForge and check PF_* env vars."
+                    "message": msg.block_setup(
+                        tool_name=name, agent_key=agent, exc=exc
                     ),
                 }
 
@@ -136,48 +159,90 @@ def pre_tool_call(
         if result["decision"] == "allow":
             return None
 
-        reasons = ", ".join(result.get("reasons") or [])
-        version = result.get("bundle_version") or "unknown"
-        state = result.get("pdp_state") or "unknown"
-
-        if result["decision"] == "require_approval":
-            # Hermes has no built-in PF approval card here — fail closed.
-            return {
-                "action": "block",
-                "message": (
-                    f"PromptForge requires approval for `{name}` "
-                    f"(bundle {version}, state={state}): {reasons}. "
-                    "Approve in your ops host (e.g. Brilliant Central) or "
-                    "set requires_approval=false in the published Act policy."
-                ),
-            }
-
         return {
             "action": "block",
-            "message": (
-                f"PromptForge denied `{name}` "
-                f"(bundle {version}, state={state}): {reasons}"
+            "message": msg.block_policy(
+                tool_name=name,
+                agent_key=pdp.agent_key or agent,
+                decision=result["decision"],
+                reasons=result.get("reasons") or [],
+                bundle_version=str(result.get("bundle_version") or "unknown"),
+                pdp_state=str(result.get("pdp_state") or "unknown"),
+            ),
+        }
+    except PdpError as exc:
+        _mark_not_ready(exc)
+        return {
+            "action": "block",
+            "message": msg.block_setup(
+                tool_name=name, agent_key=agent, exc=exc
             ),
         }
     except Exception as exc:  # noqa: BLE001 — fail closed
         logger.exception("PromptForge evaluate error")
+        _mark_not_ready(exc)
         return {
             "action": "block",
-            "message": f"PromptForge deny (evaluate error): {exc}",
+            "message": msg.block_setup(
+                tool_name=name, agent_key=agent, exc=exc
+            ),
         }
 
 
 def pre_llm_call(**kwargs: Any) -> Optional[dict]:
-    """Optional Talk injection from content pack (prefer-PF). Not a security boundary."""
-    if os.environ.get("PF_INJECT_TALK", "true").lower() in {"0", "false", "no"}:
+    """
+    Talk injection + proactive UX when governance is not ready.
+
+    When Act cannot load, inject a clear status so the model warns the user
+    before the first tool attempt fails.
+    """
+    global _warned_user
+    parts: list[str] = []
+
+    if not _governance_ready:
+        # Warn once per session (or until ready), unless PF_WARN_EVERY_TURN=true
+        every = os.environ.get("PF_WARN_EVERY_TURN", "").lower() in {
+            "1",
+            "true",
+            "yes",
+        }
+        if every or not _warned_user:
+            parts.append(
+                msg.session_not_ready_context(
+                    agent_key=_agent_key_label(),
+                    error=_last_setup_error,
+                )
+            )
+            _warned_user = True
+    else:
+        try:
+            pdp = _get_pdp()
+            ready = msg.session_ready_context(
+                agent_key=pdp.agent_key,
+                bundle_version=pdp.bundle_version,
+                pack_version=str((pdp.pack or {}).get("version") or "unknown"),
+            )
+            if ready:
+                parts.append(ready)
+        except Exception:  # noqa: BLE001
+            pass
+
+    inject_talk = os.environ.get("PF_INJECT_TALK", "true").lower() not in {
+        "0",
+        "false",
+        "no",
+    }
+    if inject_talk and _governance_ready:
+        try:
+            talk = _get_pdp().talk_system_prompt()
+            if talk:
+                parts.append(f"[PromptForge Talk pack]\n{talk}")
+        except Exception:  # noqa: BLE001
+            pass
+
+    if not parts:
         return None
-    try:
-        talk = _get_pdp().talk_system_prompt()
-        if not talk:
-            return None
-        return {"context": f"[PromptForge Talk pack]\n{talk}"}
-    except Exception:  # noqa: BLE001
-        return None
+    return {"context": "\n\n".join(parts)}
 
 
 def register(ctx: Any) -> None:
@@ -191,5 +256,4 @@ def register(ctx: Any) -> None:
     )
 
 
-# Avoid unused import warning for time in some linters
 _ = time

@@ -348,7 +348,7 @@ On create, leave **Publish Act immediately** checked to go live, or uncheck to r
 ```json
 {
   "agent_key": "leo",
-  "display_name": "Leo — Kingdom Marketing AI",
+  "display_name": "Leo — Marketing AI",
   "digital_worker_email": "leo@agents.example.com",
   "platform": "example_ops",
   "default_tier": "velocity",

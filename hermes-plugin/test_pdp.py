@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import hmac
-import json
 import unittest
 from datetime import datetime, timedelta, timezone
 
@@ -15,11 +15,12 @@ SECRET = "test-secret"
 
 
 def sign(payload: dict) -> str:
-    return hmac.new(
+    digest = hmac.new(
         SECRET.encode("utf-8"),
         _canonical_json(payload).encode("utf-8"),
         hashlib.sha256,
-    ).hexdigest()
+    ).digest()
+    return base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
 
 
 class PdpTests(unittest.TestCase):
@@ -28,6 +29,8 @@ class PdpTests(unittest.TestCase):
         sig = sign(payload)
         self.assertTrue(verify_payload_hs256(payload, sig, SECRET))
         self.assertFalse(verify_payload_hs256({"a": 2}, sig, SECRET))
+        self.assertNotIn("=", sig)
+        self.assertRegex(sig, r"^[A-Za-z0-9_-]+$")
 
     def test_resolve_category(self) -> None:
         payload = {

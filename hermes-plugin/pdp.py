@@ -7,6 +7,7 @@ Mirrors @promptforge/governance-pdp semantics:
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import hmac
 import json
@@ -29,12 +30,20 @@ def _canonical_json(obj: Any) -> str:
     return json.dumps(obj, separators=(",", ":"), sort_keys=True, ensure_ascii=False)
 
 
+def _b64url(digest: bytes) -> str:
+    """Match Node crypto HMAC digest('base64url') — no padding."""
+    return base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
+
+
 def verify_payload_hs256(payload: dict, signature: str, secret: str) -> bool:
-    expected = hmac.new(
+    digest = hmac.new(
         secret.encode("utf-8"),
         _canonical_json(payload).encode("utf-8"),
         hashlib.sha256,
-    ).hexdigest()
+    ).digest()
+    expected = _b64url(digest)
+    if len(expected) != len(signature):
+        return False
     return hmac.compare_digest(expected, signature)
 
 

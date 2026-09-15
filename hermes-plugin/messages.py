@@ -189,6 +189,30 @@ def block_policy(
     )
 
 
+def approval_prompt(
+    *,
+    tool_name: str,
+    agent_key: str,
+    tier: str,
+    scope: Optional[str],
+) -> str:
+    """Shown when PromptForge gates an act and the agent is eligible for in-channel
+    approval. This is a question a person answers, not a governance error — the
+    block message it replaces explained bundle refresh and told the operator to go
+    edit policy, which is the loop this removes."""
+    covers = (
+        f"Approving for the session also covers other `{scope}` acts."
+        if scope
+        else "Approval applies to this act only."
+    )
+    return (
+        f"Approval needed: `{agent_key}` wants to use `{tool_name}`.\n"
+        f"PromptForge governs this act at the {tier} tier. {covers}\n"
+        f"Ask the administrator to approve or decline, and say plainly that you are "
+        f"waiting on their answer."
+    )
+
+
 def block_missing_tool_name(agent_key: str) -> str:
     return (
         "🚫 TOOL BLOCKED BY PROMPTFORGE\n"

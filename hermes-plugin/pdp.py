@@ -25,6 +25,13 @@ class PdpError(Exception):
 
 TIER_RANK = {"velocity": 1, "efficiency": 2, "control": 3}
 
+# Sentinel for a 304: the server confirmed our cached copy is current.
+NOT_MODIFIED = object()
+
+# Take a full bundle copy once expiry is closer than this, so a stable ETag can
+# never strand us on an expiring bundle. See _bundle_needs_renewal.
+RENEW_MARGIN_S = 900
+
 
 def _canonical_json(obj: Any) -> str:
     return json.dumps(obj, separators=(",", ":"), sort_keys=True, ensure_ascii=False)
@@ -139,6 +146,36 @@ def evaluate_against_bundle(
     }
 
 
+def category_key_for(tool_name: str) -> Optional[str]:
+    """The `{domain}.{read|write}` category an act falls under, or None if the name
+    has no domain/action shape. Kept separate from resolve_tool_policy so the
+    evaluator's return contract stays byte-identical to evaluate.ts (the
+    conformance vectors compare both languages against the same shape)."""
+    parts = tool_name.split(".")
+    domain = parts[0]
+    action = parts[1] if len(parts) > 1 else ""
+    if not domain or not action:
+        return None
+    is_read = (
+        action.startswith("get_")
+        or action.startswith("list_")
+        or action == "search"
+    )
+    return f"{domain}.{'read' if is_read else 'write'}"
+
+
+def inline_approval_enabled(payload: dict) -> bool:
+    """Whether PromptForge has marked this agent eligible for in-channel approval.
+
+    Defaults to False, deliberately. Hermes records no approver identity and has no
+    role concept, so its gate asks whoever is present — enabling this globally would
+    silently reduce "only a named admin may approve" (Glen, 09-15-2026) to "anyone
+    in the channel". Eligibility is therefore opt-in per agent, published by
+    PromptForge, and only for agents whose channel is already admin-only.
+    """
+    return bool(payload.get("inline_approval") is True)
+
+
 def resolve_tool_policy(payload: dict, tool_name: str) -> Optional[dict]:
     tools = payload.get("tools") or {}
     if tool_name in tools:
@@ -148,18 +185,9 @@ def resolve_tool_policy(payload: dict, tool_name: str) -> Optional[dict]:
     # `const [domain, action] = toolName.split('.')` in evaluate.ts. Splitting
     # once and keeping the remainder differs for names like analytics.search.daily,
     # where the remainder is not equal to "search" but the second segment is.
-    parts = tool_name.split(".")
-    domain = parts[0]
-    action = parts[1] if len(parts) > 1 else ""
-    if not domain or not action:
+    category_key = category_key_for(tool_name)
+    if not category_key:
         return None
-
-    is_read = (
-        action.startswith("get_")
-        or action.startswith("list_")
-        or action == "search"
-    )
-    category_key = f"{domain}.{'read' if is_read else 'write'}"
     cats = payload.get("tool_categories") or {}
     return cats.get(category_key)
 
@@ -186,6 +214,7 @@ class GovernancePdp:
         self.pack: Optional[dict] = None
         self.bundle: Optional[dict] = None
         self._last_refresh_failed = False
+        self._etags: dict = {}
 
     @property
     def bundle_version(self) -> str:
@@ -197,20 +226,49 @@ class GovernancePdp:
     def state(self) -> str:
         return self._derive_state()
 
-    def _fetch_json(self, path: str) -> Any:
+    def _bundle_needs_renewal(self) -> bool:
+        """True when the cached bundle is close enough to expiry that we must take a
+        full copy rather than revalidate.
+
+        The bundle ETag is derived from the policy hash alone
+        (`bundle-{agent}-{env}-{version}`), while `expires_at` is recomputed as
+        `now + ttl` on every request. So an unchanged policy revalidates as 304
+        indefinitely, and a client that always sends If-None-Match would keep a
+        bundle frozen at its original expiry, slide into grace, and then fail closed
+        fleet-wide against a perfectly healthy server. Renewing early is what makes
+        conditional revalidation safe here.
+        """
+        if not self.bundle:
+            return True
+        payload = self.bundle.get("payload") or {}
+        try:
+            expires = _parse_iso(payload["expires_at"])
+        except Exception:  # noqa: BLE001
+            return True
+        remaining = expires.timestamp() - datetime.now(timezone.utc).timestamp()
+        return remaining < RENEW_MARGIN_S
+
+    def _fetch_json(self, path: str, *, allow_conditional: bool = True) -> Any:
+        """GET with conditional revalidation. Returns NOT_MODIFIED when the server
+        confirms our copy is current, which makes a refresh cheap enough to run on
+        every denial instead of only on a timer."""
         url = f"{self.base_url}{path}"
-        req = urllib.request.Request(
-            url,
-            headers={
-                "Authorization": f"Bearer {self.token}",
-                "Accept": "application/json",
-            },
-            method="GET",
-        )
+        headers = {
+            "Authorization": f"Bearer {self.token}",
+            "Accept": "application/json",
+        }
+        cached_etag = self._etags.get(path) if allow_conditional else None
+        if cached_etag:
+            headers["If-None-Match"] = cached_etag
+        req = urllib.request.Request(url, headers=headers, method="GET")
         try:
             with urllib.request.urlopen(req, timeout=self.timeout_s) as resp:
+                etag = resp.headers.get("ETag")
                 body = json.loads(resp.read().decode("utf-8"))
         except urllib.error.HTTPError as exc:
+            # urllib raises on 304 because it is not a 2xx. It is the success case.
+            if exc.code == 304:
+                return NOT_MODIFIED
             detail = exc.read().decode("utf-8", errors="replace")
             raise PdpError(f"HTTP {exc.code}: {detail or exc.reason}") from exc
         except Exception as exc:  # noqa: BLE001
@@ -218,6 +276,8 @@ class GovernancePdp:
 
         if not body.get("success") or "data" not in body:
             raise PdpError(body.get("error") or "Unsuccessful governance response")
+        if etag:
+            self._etags[path] = etag
         return body["data"]
 
     def refresh(self) -> dict:
@@ -225,7 +285,23 @@ class GovernancePdp:
         key = urllib.parse.quote(self.agent_key, safe="")
         try:
             pack = self._fetch_json(f"/api/governance/packs/{key}?{qs}")
-            bundle = self._fetch_json(f"/api/governance/bundles/{key}?{qs}")
+            bundle = self._fetch_json(
+                f"/api/governance/bundles/{key}?{qs}",
+                allow_conditional=not self._bundle_needs_renewal(),
+            )
+
+            if pack is NOT_MODIFIED:
+                pack = self.pack
+            if bundle is NOT_MODIFIED:
+                # Nothing changed server-side; keep the verified copy rather than
+                # re-verifying a signature we already checked.
+                self._last_refresh_failed = False
+                return {
+                    "pack_version": (pack or {}).get("version"),
+                    "bundle_version": self.bundle_version,
+                    "state": self._derive_state(),
+                    "not_modified": True,
+                }
 
             if bundle.get("alg") != "HS256":
                 raise PdpError(f"Unsupported bundle alg: {bundle.get('alg')}")

@@ -4,8 +4,15 @@ PromptForge governance PEP for Hermes Agent.
 Registers pre_tool_call to block denied tools using a locally cached,
 signature-verified PromptForge policy bundle.
 
-Block contract (Hermes):
-  return {"action": "block", "message": "..."}
+Directive contract (Hermes):
+  return {"action": "block", "message": "..."}    — refuse outright
+  return {"action": "approve", "message", "rule_key"} — escalate to Hermes's own
+      human-approval gate, which asks in whatever channel the agent is in
+
+We use "approve" only for PromptForge's `require_approval` decision, and only for
+agents PromptForge has marked eligible. `deny` always blocks: letting a human wave
+through an act policy refuses outright is privilege escalation, which is a separate
+mechanism with its own binding and expiry.
 """
 
 from __future__ import annotations
@@ -18,9 +25,11 @@ from typing import Any, Optional
 
 try:
     from .pdp import GovernancePdp, PdpError
+    from . import pdp as pdp_mod
     from . import messages as msg
 except ImportError:  # loaded as flat plugin directory on sys.path
     from pdp import GovernancePdp, PdpError  # type: ignore
+    import pdp as pdp_mod  # type: ignore
     import messages as msg  # type: ignore
 
 logger = logging.getLogger("promptforge.governance")
@@ -35,7 +44,22 @@ _governance_ready = False
 _last_setup_error: Optional[str] = None
 _warned_user = False
 
-DEFAULT_REFRESH_SECONDS = 600
+# Halved now that refreshes are conditional (304s are nearly free), which bounds how
+# long a policy *tightening* can go unnoticed. Loosening no longer waits for this
+# timer at all — a denial revalidates on the spot.
+DEFAULT_REFRESH_SECONDS = 300
+
+
+def _inline_approval_allowed(pdp: GovernancePdp) -> bool:
+    """Whether this agent may have gated acts escalated to Hermes's approval gate.
+
+    Off unless PromptForge published it. Hermes keeps no approver identity and has no
+    role concept, so its gate asks whoever is present; enabling this for an agent
+    whose channel is not already restricted to named admins would quietly turn
+    "only an administrator may approve" into "anyone in the room".
+    """
+    bundle = pdp.bundle or {}
+    return pdp_mod.inline_approval_enabled(bundle.get("payload") or {})
 
 
 def _agent_key_label() -> str:
@@ -158,6 +182,34 @@ def pre_tool_call(
         result = pdp.evaluate(name, correlation_id=task_id or None)
         if result["decision"] == "allow":
             return None
+
+        # A denial is the strongest available signal that our copy of the policy may
+        # be stale — it is exactly when an operator has just published a fix. Spend
+        # one conditional revalidation before refusing; a 304 costs almost nothing and
+        # this is what turns "fix and wait" into "fix and retry".
+        try:
+            meta = pdp.refresh()
+            _mark_ready(meta)
+            result = pdp.evaluate(name, correlation_id=task_id or None)
+            if result["decision"] == "allow":
+                return None
+        except Exception as exc:  # noqa: BLE001 — keep the original decision
+            logger.debug("PromptForge revalidation before block failed: %s", exc)
+
+        if result["decision"] == "require_approval" and _inline_approval_allowed(pdp):
+            scope = pdp_mod.category_key_for(name)
+            return {
+                "action": "approve",
+                "message": msg.approval_prompt(
+                    tool_name=name,
+                    agent_key=pdp.agent_key or agent,
+                    tier=str(result.get("tier") or "unknown"),
+                    scope=scope,
+                ),
+                # Grain for Hermes's own allowlist. Category-level so one answer
+                # clears the rest of the chain in that domain instead of one link.
+                "rule_key": scope or name,
+            }
 
         return {
             "action": "block",

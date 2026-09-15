@@ -5,6 +5,7 @@
   "packageManager": "pnpm@9.15.0",
   "scripts": {
     "test": "pnpm -r test",
+    "test:conformance": "pnpm --filter @promptforge/governance-pdp test -- conformance && python3 -m unittest discover -s hermes-plugin -p 'test_*.py'",
     "typecheck": "pnpm -r typecheck",
     "build": "pnpm -r build"
   },

@@ -53,14 +53,107 @@ def _parse_iso(ts: str) -> datetime:
     return datetime.fromisoformat(ts)
 
 
+def _max_tier(a: Optional[str], b: Optional[str]) -> str:
+    """Most-restrictive-wins, matching maxTier() in evaluate.ts."""
+    left = a or "efficiency"
+    right = b or "efficiency"
+    return left if TIER_RANK.get(left, 2) >= TIER_RANK.get(right, 2) else right
+
+
+def evaluate_against_bundle(
+    payload: dict,
+    tool_name: str,
+    pdp_state: str = "normal",
+    correlation_id: Optional[str] = None,
+) -> dict:
+    """Evaluate a tool request against an already-verified bundle payload.
+
+    Line-for-line equivalent of evaluateAgainstBundle() in
+    packages/governance-pdp/src/evaluate.ts, which is the reference
+    implementation. Equivalence is proven — not assumed — by
+    conformance/vectors.json, which this and the TypeScript evaluator both run.
+    Do not change behaviour here without changing the reference and the vectors
+    together.
+    """
+    corr = correlation_id or str(uuid4())
+    version = payload.get("version") or "none"
+
+    if pdp_state == "fail_closed":
+        return {
+            "decision": "deny",
+            "tier": "control",
+            "requires_approval": True,
+            "reasons": ["pdp_fail_closed"],
+            "bundle_version": version,
+            "correlation_id": corr,
+            "pdp_state": pdp_state,
+        }
+
+    tool_policy = resolve_tool_policy(payload, tool_name)
+    if not tool_policy:
+        return {
+            "decision": "deny",
+            "tier": "control",
+            "requires_approval": True,
+            "reasons": ["unknown_tool", f"tool:{tool_name}"],
+            "bundle_version": version,
+            "correlation_id": corr,
+            "pdp_state": pdp_state,
+        }
+
+    if not tool_policy.get("granted", False):
+        return {
+            "decision": "deny",
+            # "or control" is defensive only; a bundle whose policy omits tier is
+            # malformed and outside the vectors.
+            "tier": tool_policy.get("tier") or "control",
+            "requires_approval": True,
+            "reasons": ["not_granted", f"tool:{tool_name}"],
+            "bundle_version": version,
+            "correlation_id": corr,
+            "pdp_state": pdp_state,
+        }
+
+    tier = _max_tier(payload.get("default_tier"), tool_policy.get("tier"))
+    # The control tier gates on its own, independent of the per-act flag. Omitting
+    # this is what let Hermes allow control-tier acts outright while PromptForge
+    # and your ops platform gated them (see the 09-15-2026 governance review).
+    requires_approval = bool(tool_policy.get("requires_approval")) or tier == "control"
+
+    reasons = [f"tier:{tier}"]
+    if pdp_state == "grace":
+        reasons.append("grace_period")
+    if pdp_state == "cached":
+        reasons.append("using_cached_bundle")
+    if requires_approval:
+        reasons.append("requires_approval")
+
+    return {
+        "decision": "require_approval" if requires_approval else "allow",
+        "tier": tier,
+        "requires_approval": requires_approval,
+        "reasons": reasons,
+        "bundle_version": version,
+        "correlation_id": corr,
+        "pdp_state": pdp_state,
+    }
+
+
 def resolve_tool_policy(payload: dict, tool_name: str) -> Optional[dict]:
     tools = payload.get("tools") or {}
     if tool_name in tools:
         return tools[tool_name]
 
-    if "." not in tool_name:
+    # Split on every dot and take the second segment, matching
+    # `const [domain, action] = toolName.split('.')` in evaluate.ts. Splitting
+    # once and keeping the remainder differs for names like analytics.search.daily,
+    # where the remainder is not equal to "search" but the second segment is.
+    parts = tool_name.split(".")
+    domain = parts[0]
+    action = parts[1] if len(parts) > 1 else ""
+    if not domain or not action:
         return None
-    domain, action = tool_name.split(".", 1)
+
     is_read = (
         action.startswith("get_")
         or action.startswith("list_")
@@ -191,68 +284,12 @@ class GovernancePdp:
                 "pdp_state": "fail_closed",
             }
 
-        payload = self.bundle.get("payload") or {}
-        version = payload.get("version") or "none"
-
-        if state == "fail_closed":
-            return {
-                "decision": "deny",
-                "tier": "control",
-                "requires_approval": True,
-                "reasons": ["pdp_fail_closed"],
-                "bundle_version": version,
-                "correlation_id": corr,
-                "pdp_state": state,
-            }
-
-        tool_policy = resolve_tool_policy(payload, tool_name)
-        if not tool_policy:
-            return {
-                "decision": "deny",
-                "tier": "control",
-                "requires_approval": True,
-                "reasons": ["unknown_tool", f"tool:{tool_name}"],
-                "bundle_version": version,
-                "correlation_id": corr,
-                "pdp_state": state,
-            }
-
-        if not tool_policy.get("granted", False):
-            return {
-                "decision": "deny",
-                "tier": tool_policy.get("tier") or "control",
-                "requires_approval": True,
-                "reasons": ["not_granted", f"tool:{tool_name}"],
-                "bundle_version": version,
-                "correlation_id": corr,
-                "pdp_state": state,
-            }
-
-        tier = tool_policy.get("tier") or payload.get("default_tier") or "efficiency"
-        default_tier = payload.get("default_tier") or "efficiency"
-        if TIER_RANK.get(default_tier, 2) > TIER_RANK.get(tier, 2):
-            tier = default_tier
-
-        if tool_policy.get("requires_approval"):
-            return {
-                "decision": "require_approval",
-                "tier": tier,
-                "requires_approval": True,
-                "reasons": ["requires_approval", f"tier:{tier}"],
-                "bundle_version": version,
-                "correlation_id": corr,
-                "pdp_state": state,
-            }
-
-        return {
-            "decision": "allow",
-            "tier": tier,
-            "requires_approval": False,
-            "reasons": ["granted"],
-            "bundle_version": version,
-            "correlation_id": corr,
-            "pdp_state": state,
-        }
+        return evaluate_against_bundle(
+            self.bundle.get("payload") or {},
+            tool_name,
+            pdp_state=state,
+            correlation_id=corr,
+        )
 
     def talk_system_prompt(self) -> Optional[str]:
         if not self.pack:

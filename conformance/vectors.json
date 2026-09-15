@@ -1,0 +1,379 @@
+{
+  "schema_version": 1,
+  "description": "Golden decision vectors. Every PromptForge policy evaluator, in every language, must produce exactly these results. The TypeScript evaluator in packages/governance-pdp/src/evaluate.ts is the reference implementation; these vectors pin its behaviour so other implementations can be proven equivalent rather than assumed equivalent.",
+  "scope": {
+    "in": "The pure evaluate step: a verified bundle payload plus a PDP state in, a decision out.",
+    "out": "Fetching, HS256 verification, caching and TTL/grace state derivation. Those are per-host concerns with their own tests. A host that has no bundle at all is also out of scope: report fail_closed and these vectors apply."
+  },
+  "bundles": {
+    "standard": {
+      "org_id": "00000000-0000-0000-0000-0000000000cf",
+      "agent_key": "conformance",
+      "environment": "staging",
+      "version": "conformance-1",
+      "etag": "conformance-1",
+      "issued_at": "2026-09-15T00:00:00.000Z",
+      "not_before": "2026-09-15T00:00:00.000Z",
+      "expires_at": "2026-09-15T06:00:00.000Z",
+      "grace_ms": 3600000,
+      "default_tier": "velocity",
+      "tools": {
+        "email.send_now": { "granted": true, "tier": "efficiency", "requires_approval": true },
+        "email.list_campaigns": { "granted": true, "tier": "velocity", "requires_approval": false },
+        "contacts.delete": { "granted": false, "tier": "control", "requires_approval": true },
+        "reports.generate": { "granted": true, "tier": "control", "requires_approval": false },
+        "hermes_native_act": { "granted": true, "tier": "velocity", "requires_approval": false },
+        "deep.nested.act": { "granted": true, "tier": "velocity", "requires_approval": false }
+      },
+      "tool_categories": {
+        "analytics.read": { "granted": true, "tier": "velocity", "requires_approval": false },
+        "analytics.write": { "granted": true, "tier": "efficiency", "requires_approval": true },
+        "vault.read": { "granted": false, "tier": "control", "requires_approval": true }
+      }
+    },
+    "default_control": {
+      "org_id": "00000000-0000-0000-0000-0000000000cf",
+      "agent_key": "conformance",
+      "environment": "staging",
+      "version": "conformance-2",
+      "etag": "conformance-2",
+      "issued_at": "2026-09-15T00:00:00.000Z",
+      "not_before": "2026-09-15T00:00:00.000Z",
+      "expires_at": "2026-09-15T06:00:00.000Z",
+      "grace_ms": 3600000,
+      "default_tier": "control",
+      "tools": {
+        "notes.append": { "granted": true, "tier": "velocity", "requires_approval": false }
+      }
+    },
+    "no_categories": {
+      "org_id": "00000000-0000-0000-0000-0000000000cf",
+      "agent_key": "conformance",
+      "environment": "staging",
+      "version": "conformance-3",
+      "etag": "conformance-3",
+      "issued_at": "2026-09-15T00:00:00.000Z",
+      "not_before": "2026-09-15T00:00:00.000Z",
+      "expires_at": "2026-09-15T06:00:00.000Z",
+      "grace_ms": 3600000,
+      "default_tier": "efficiency",
+      "tools": {
+        "email.send_now": { "granted": true, "tier": "efficiency", "requires_approval": false }
+      }
+    }
+  },
+  "cases": [
+    {
+      "id": "exact-match-allow",
+      "why": "The ordinary case. An explicitly listed, granted, unflagged act allows, and the only reason returned is the resolved tier.",
+      "bundle": "standard",
+      "pdp_state": "normal",
+      "tool_name": "email.list_campaigns",
+      "expect": {
+        "decision": "allow",
+        "tier": "velocity",
+        "requires_approval": false,
+        "reasons": ["tier:velocity"]
+      }
+    },
+    {
+      "id": "exact-match-flagged-requires-approval",
+      "why": "An explicit requires_approval flag gates the act regardless of tier.",
+      "bundle": "standard",
+      "pdp_state": "normal",
+      "tool_name": "email.send_now",
+      "expect": {
+        "decision": "require_approval",
+        "tier": "efficiency",
+        "requires_approval": true,
+        "reasons": ["tier:efficiency", "requires_approval"]
+      }
+    },
+    {
+      "id": "control-tier-without-flag-still-gates",
+      "why": "THE DIVERGENCE THIS SUITE EXISTS FOR. An act at the control tier requires approval even when its requires_approval flag is false. Both Python evaluators got this wrong until 09-15-2026, allowing outright what the TypeScript evaluators gated. Latent only because no act had ever been control-without-flag; the moment tiers are derived from process characteristics rather than typed by hand, this becomes the normal case.",
+      "bundle": "standard",
+      "pdp_state": "normal",
+      "tool_name": "reports.generate",
+      "expect": {
+        "decision": "require_approval",
+        "tier": "control",
+        "requires_approval": true,
+        "reasons": ["tier:control", "requires_approval"]
+      }
+    },
+    {
+      "id": "default-tier-control-escalates-a-velocity-act",
+      "why": "Tier resolution is most-restrictive-wins across the bundle default and the act, so a control default gates an act labelled velocity. The same rule the previous case tests, reached through the default instead.",
+      "bundle": "default_control",
+      "pdp_state": "normal",
+      "tool_name": "notes.append",
+      "expect": {
+        "decision": "require_approval",
+        "tier": "control",
+        "requires_approval": true,
+        "reasons": ["tier:control", "requires_approval"]
+      }
+    },
+    {
+      "id": "not-granted-denies",
+      "why": "An act present in policy but not granted denies, reports its own tier rather than a synthetic one, and always sets requires_approval.",
+      "bundle": "standard",
+      "pdp_state": "normal",
+      "tool_name": "contacts.delete",
+      "expect": {
+        "decision": "deny",
+        "tier": "control",
+        "requires_approval": true,
+        "reasons": ["not_granted", "tool:contacts.delete"]
+      }
+    },
+    {
+      "id": "unknown-act-denies-as-control",
+      "why": "An act with no exact entry and no matching category denies. The reported tier is control regardless of the bundle default, because an unknown act is the most restrictive case there is.",
+      "bundle": "standard",
+      "pdp_state": "normal",
+      "tool_name": "billing.refund",
+      "expect": {
+        "decision": "deny",
+        "tier": "control",
+        "requires_approval": true,
+        "reasons": ["unknown_tool", "tool:billing.refund"]
+      }
+    },
+    {
+      "id": "category-fallback-read-get-prefix",
+      "why": "An unlisted act falls back to {domain}.read when its action starts with get_.",
+      "bundle": "standard",
+      "pdp_state": "normal",
+      "tool_name": "analytics.get_summary",
+      "expect": {
+        "decision": "allow",
+        "tier": "velocity",
+        "requires_approval": false,
+        "reasons": ["tier:velocity"]
+      }
+    },
+    {
+      "id": "category-fallback-read-list-prefix",
+      "why": "list_ is the second read prefix.",
+      "bundle": "standard",
+      "pdp_state": "normal",
+      "tool_name": "analytics.list_reports",
+      "expect": {
+        "decision": "allow",
+        "tier": "velocity",
+        "requires_approval": false,
+        "reasons": ["tier:velocity"]
+      }
+    },
+    {
+      "id": "category-fallback-read-bare-search",
+      "why": "search is a read by exact match, not by prefix. search_indexes is therefore a write, which the next case pins.",
+      "bundle": "standard",
+      "pdp_state": "normal",
+      "tool_name": "analytics.search",
+      "expect": {
+        "decision": "allow",
+        "tier": "velocity",
+        "requires_approval": false,
+        "reasons": ["tier:velocity"]
+      }
+    },
+    {
+      "id": "category-fallback-search-prefix-is-a-write",
+      "why": "Guards the exact-match-not-prefix rule for search. An implementation using startswith('search') would misclassify this as a read and skip the approval gate.",
+      "bundle": "standard",
+      "pdp_state": "normal",
+      "tool_name": "analytics.search_indexes",
+      "expect": {
+        "decision": "require_approval",
+        "tier": "efficiency",
+        "requires_approval": true,
+        "reasons": ["tier:efficiency", "requires_approval"]
+      }
+    },
+    {
+      "id": "category-fallback-write-default",
+      "why": "Anything not matching a read rule is a write.",
+      "bundle": "standard",
+      "pdp_state": "normal",
+      "tool_name": "analytics.rebuild",
+      "expect": {
+        "decision": "require_approval",
+        "tier": "efficiency",
+        "requires_approval": true,
+        "reasons": ["tier:efficiency", "requires_approval"]
+      }
+    },
+    {
+      "id": "category-fallback-can-deny",
+      "why": "A category may withhold the grant, and then the fallback denies rather than allowing.",
+      "bundle": "standard",
+      "pdp_state": "normal",
+      "tool_name": "vault.get_secret",
+      "expect": {
+        "decision": "deny",
+        "tier": "control",
+        "requires_approval": true,
+        "reasons": ["not_granted", "tool:vault.get_secret"]
+      }
+    },
+    {
+      "id": "domainless-act-matches-exactly",
+      "why": "Hermes-native act names carry no domain at all, and many real-world act names are this shape. An exact entry must still match.",
+      "bundle": "standard",
+      "pdp_state": "normal",
+      "tool_name": "hermes_native_act",
+      "expect": {
+        "decision": "allow",
+        "tier": "velocity",
+        "requires_approval": false,
+        "reasons": ["tier:velocity"]
+      }
+    },
+    {
+      "id": "domainless-act-cannot-fall-back",
+      "why": "An unlisted name with no dot has no domain to build a category key from, so it denies as unknown. It must not crash and must not be split into a spurious domain.",
+      "bundle": "standard",
+      "pdp_state": "normal",
+      "tool_name": "undeclared_native_act",
+      "expect": {
+        "decision": "deny",
+        "tier": "control",
+        "requires_approval": true,
+        "reasons": ["unknown_tool", "tool:undeclared_native_act"]
+      }
+    },
+    {
+      "id": "trailing-dot-denies",
+      "why": "A malformed name with an empty action must deny rather than build the key 'malformed.write'.",
+      "bundle": "standard",
+      "pdp_state": "normal",
+      "tool_name": "malformed.",
+      "expect": {
+        "decision": "deny",
+        "tier": "control",
+        "requires_approval": true,
+        "reasons": ["unknown_tool", "tool:malformed."]
+      }
+    },
+    {
+      "id": "multi-segment-act-matches-exactly",
+      "why": "An explicitly listed multi-segment name matches before any splitting happens, so the two languages agree here even though they split differently.",
+      "bundle": "standard",
+      "pdp_state": "normal",
+      "tool_name": "deep.nested.act",
+      "expect": {
+        "decision": "allow",
+        "tier": "velocity",
+        "requires_approval": false,
+        "reasons": ["tier:velocity"]
+      }
+    },
+    {
+      "id": "multi-segment-fallback-uses-second-segment-only",
+      "why": "Pins the reference split. For a.b.c the action is the SECOND segment, so analytics.get_daily.v2 classifies on 'get_daily' and reads. Note this case alone does not separate the two split strategies, because a remainder of 'get_daily.v2' also starts with get_ — the next case is the one that does.",
+      "bundle": "standard",
+      "pdp_state": "normal",
+      "tool_name": "analytics.get_daily.v2",
+      "expect": {
+        "decision": "allow",
+        "tier": "velocity",
+        "requires_approval": false,
+        "reasons": ["tier:velocity"]
+      }
+    },
+    {
+      "id": "multi-segment-fallback-separates-the-two-splits",
+      "why": "The only shape where splitting on every dot and splitting once actually differ. The prefix rules cannot separate them, because a remainder always begins with the second segment — so a remainder starts with get_ exactly when the second segment does. The separator is the one rule that matches EXACTLY rather than by prefix: 'search'. The reference sees second segment 'search' and reads; an implementation keeping the remainder sees 'search.daily', which is not equal to 'search', and writes — gating an act the reference allows. Production has zero multi-segment act names, so this pins intent rather than guarding live traffic.",
+      "bundle": "standard",
+      "pdp_state": "normal",
+      "tool_name": "analytics.search.daily",
+      "expect": {
+        "decision": "allow",
+        "tier": "velocity",
+        "requires_approval": false,
+        "reasons": ["tier:velocity"]
+      }
+    },
+    {
+      "id": "missing-categories-object-denies-cleanly",
+      "why": "tool_categories is optional. Its absence must deny an unlisted act, not throw.",
+      "bundle": "no_categories",
+      "pdp_state": "normal",
+      "tool_name": "email.get_campaigns",
+      "expect": {
+        "decision": "deny",
+        "tier": "control",
+        "requires_approval": true,
+        "reasons": ["unknown_tool", "tool:email.get_campaigns"]
+      }
+    },
+    {
+      "id": "fail-closed-denies-before-any-lookup",
+      "why": "In fail_closed the act is never resolved. Even an explicitly granted act denies, and the single reason is the state.",
+      "bundle": "standard",
+      "pdp_state": "fail_closed",
+      "tool_name": "email.list_campaigns",
+      "expect": {
+        "decision": "deny",
+        "tier": "control",
+        "requires_approval": true,
+        "reasons": ["pdp_fail_closed"]
+      }
+    },
+    {
+      "id": "grace-state-allows-and-says-so",
+      "why": "Inside the grace window the decision still stands, but the reasons must disclose it so a host can surface degraded governance. Both Python evaluators omitted this.",
+      "bundle": "standard",
+      "pdp_state": "grace",
+      "tool_name": "email.list_campaigns",
+      "expect": {
+        "decision": "allow",
+        "tier": "velocity",
+        "requires_approval": false,
+        "reasons": ["tier:velocity", "grace_period"]
+      }
+    },
+    {
+      "id": "cached-state-allows-and-says-so",
+      "why": "Same disclosure requirement when serving a cached bundle after a failed refresh.",
+      "bundle": "standard",
+      "pdp_state": "cached",
+      "tool_name": "email.list_campaigns",
+      "expect": {
+        "decision": "allow",
+        "tier": "velocity",
+        "requires_approval": false,
+        "reasons": ["tier:velocity", "using_cached_bundle"]
+      }
+    },
+    {
+      "id": "grace-state-with-approval-orders-reasons",
+      "why": "Pins reason ordering when several apply: tier first, then state, then the approval marker. Ordering matters because hosts match on position in logs and some parse reasons[0].",
+      "bundle": "standard",
+      "pdp_state": "grace",
+      "tool_name": "email.send_now",
+      "expect": {
+        "decision": "require_approval",
+        "tier": "efficiency",
+        "requires_approval": true,
+        "reasons": ["tier:efficiency", "grace_period", "requires_approval"]
+      }
+    },
+    {
+      "id": "deny-reasons-ignore-state",
+      "why": "Deny paths report why the act was refused, not what state the PDP was in. A cached bundle must not add noise to an unknown-act denial.",
+      "bundle": "standard",
+      "pdp_state": "cached",
+      "tool_name": "billing.refund",
+      "expect": {
+        "decision": "deny",
+        "tier": "control",
+        "requires_approval": true,
+        "reasons": ["unknown_tool", "tool:billing.refund"]
+      }
+    }
+  ]
+}

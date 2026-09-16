@@ -10,6 +10,7 @@ assumed from the fact that a hash is being computed.
 from __future__ import annotations
 
 import hashlib
+import sys
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -201,6 +202,47 @@ class HeartbeatIsIndependentOfSessions(unittest.TestCase):
                 self.plugin._refresh_loop(interval_s=999)
 
         self.assertEqual(calls, ["refresh"])
+
+    def _register_with_argv(self, argv: list) -> tuple:
+        """Returns (heartbeat_started, hooks_registered) for a given command line."""
+        started: list = []
+        hooks: dict = {}
+
+        class Ctx:
+            def register_hook(self, name: str, fn: object) -> None:
+                hooks[name] = fn
+
+        with mock.patch.object(sys, "argv", argv):
+            with mock.patch.object(self.plugin, "_start_refresh_loop", lambda: started.append(True)):
+                self.plugin.register(Ctx())
+        return bool(started), set(hooks)
+
+    def test_the_dashboard_does_not_heartbeat_but_is_still_governed(self) -> None:
+        """It shares the default profile's home, so it loaded the plugin and counted as a second
+        resident enforcement point for that agent (P-128). Hooks must survive regardless: a process
+        we judged non-agent that turns out to execute tools has to stay governed."""
+        beats, hooks = self._register_with_argv(["hermes", "dashboard"])
+        self.assertFalse(beats)
+        self.assertIn("pre_tool_call", hooks)
+
+    def test_a_gateway_heartbeats(self) -> None:
+        beats, _ = self._register_with_argv(["hermes", "--profile", "alex", "gateway", "run"])
+        self.assertTrue(beats)
+
+    def test_a_bare_interactive_session_heartbeats(self) -> None:
+        """The P-128 process was exactly this — long-lived, executes tools, must stay visible."""
+        beats, _ = self._register_with_argv(["hermes"])
+        self.assertTrue(beats)
+
+    def test_a_profile_named_like_a_utility_still_heartbeats(self) -> None:
+        # A flag's value must not be mistaken for the subcommand and silence a real gateway.
+        beats, _ = self._register_with_argv(["hermes", "--profile", "dashboard", "gateway", "run"])
+        self.assertTrue(beats)
+
+    def test_an_unrecognised_command_heartbeats(self) -> None:
+        """Fails toward visibility: a spurious heartbeat is noise, a missing one is a blind spot."""
+        beats, _ = self._register_with_argv(["hermes", "some-future-serve-command"])
+        self.assertTrue(beats)
 
     def test_a_failing_first_refresh_does_not_escape(self) -> None:
         # A network error at load must not take the gateway down with it.

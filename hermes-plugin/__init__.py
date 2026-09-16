@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import logging
 import os
+import sys
 import threading
 from collections import OrderedDict
 from typing import Any, Optional
@@ -55,6 +56,17 @@ _warned_user = False
 # long a policy *tightening* can go unnoticed. Loosening no longer waits for this
 # timer at all — a denial revalidates on the spot.
 DEFAULT_REFRESH_SECONDS = 300
+
+# Processes that carry an agent's credentials but are not the agent. `hermes dashboard` shares the
+# default profile's home, so it loads this plugin and — once the heartbeat moved to plugin load —
+# began polling as a second resident enforcement point for that agent. A read-only UI should not
+# appear in the count of things enforcing policy.
+#
+# A deny-list, not an allow-list, and hooks are registered either way. Both choices follow from the
+# same lesson: the dangerous failure is a process that enforces nothing and reports nothing, since
+# absence looks exactly like quiet (P-115, P-122, P-128). An unrecognised command therefore keeps
+# both its hooks and its heartbeat — a spurious heartbeat is noise, a missing one is a blind spot.
+_NON_AGENT_COMMANDS = frozenset({"dashboard"})
 
 
 # Escalated acts awaiting a human answer, keyed by tool call. Bounded: an approval
@@ -205,6 +217,19 @@ def _refresh_loop(interval_s: float) -> None:
             logger.warning("PromptForge refresh failed: %s", exc)
         if _refresh_stop.wait(interval_s):
             return
+
+
+def _is_agent_runtime() -> bool:
+    """Whether this process is a runtime that can act as the agent, and so should heartbeat.
+
+    A bare `hermes` — no subcommand — is the interactive session, which is long-lived and *does*
+    execute tools; that is precisely what the unsupervised process in P-128 was. It must stay
+    visible, so absence of a subcommand means yes.
+    """
+    args = set(sys.argv[1:])
+    if "gateway" in args:
+        return True  # e.g. `--profile dashboard gateway run`: a flag value is not the command
+    return not (args & _NON_AGENT_COMMANDS)
 
 
 def _start_refresh_loop() -> None:
@@ -495,4 +520,11 @@ def register(ctx: Any) -> None:
     # and quiet" and "not governed" the same observation from our side, the very confusion P-121
     # exists to remove. It also means a gateway with broken credentials looked fine until someone
     # happened to talk to it.
-    _start_refresh_loop()
+    #
+    # Hooks above are registered unconditionally; only the heartbeat is scoped. If a process we
+    # judged non-agent ever does execute a tool, it is still governed — it simply refreshes at
+    # session start, as everything did before.
+    if _is_agent_runtime():
+        _start_refresh_loop()
+    else:
+        logger.info("promptforge-governance: hooks active, heartbeat off (not an agent runtime)")

@@ -20,9 +20,10 @@ standing check compares.
 from __future__ import annotations
 
 import hashlib
+import uuid
 from pathlib import Path
 
-VERSION = "1.2.0"
+VERSION = "1.3.0"
 
 # Runtime modules only. Tests are excluded because they do not enforce anything, and including
 # them would report a new build for a change that cannot alter a decision.
@@ -61,6 +62,15 @@ def _compute_build() -> str:
 
 BUILD = _compute_build()
 
+# Identifies this *process*, not this code. Two enforcement points running the same build send the
+# same BUILD and are otherwise indistinguishable, which is why an unsupervised gateway holding an
+# agent's identity for six days was only caught by accident — it happened to be stale (P-128). With
+# an instance id, a second enforcement point is visible even when it is perfectly up to date.
+#
+# Regenerated per process, so a restart deliberately produces a new id: "how many are running now"
+# is answered by how many distinct ids are still fetching, not by how many have ever appeared.
+INSTANCE = uuid.uuid4().hex[:12]
+
 
 def build_headers() -> dict:
     """Headers identifying this build, sent on every governance fetch.
@@ -74,4 +84,5 @@ def build_headers() -> dict:
     return {
         "X-PromptForge-Pep-Build": BUILD,
         "X-PromptForge-Pep-Version": VERSION,
+        "X-PromptForge-Pep-Instance": INSTANCE,
     }

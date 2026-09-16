@@ -69,10 +69,52 @@ class BuildIdentity(unittest.TestCase):
         with mock.patch.object(Path, "read_bytes", explode):
             self.assertEqual(build_mod._compute_build(), "unknown")
 
-    def test_the_headers_carry_build_and_version(self) -> None:
+    def test_the_headers_carry_build_version_and_instance(self) -> None:
         headers = build_mod.build_headers()
         self.assertEqual(headers["X-PromptForge-Pep-Build"], build_mod.BUILD)
         self.assertEqual(headers["X-PromptForge-Pep-Version"], build_mod.VERSION)
+        self.assertEqual(headers["X-PromptForge-Pep-Instance"], build_mod.INSTANCE)
+
+
+class InstanceIdentity(unittest.TestCase):
+    """The instance id is what makes a second enforcement point visible.
+
+    Two processes on the same build send the same BUILD, so the unsupervised gateway that held
+    zander's identity for six days (P-128) was only detectable because it was *stale*. One running
+    current code would have been invisible. The id must therefore be per-process, and must not be
+    derived from anything the two processes share.
+    """
+
+    def test_the_instance_is_a_short_hex_id(self) -> None:
+        self.assertRegex(build_mod.INSTANCE, r"^[0-9a-f]{12}$")
+
+    def test_the_instance_is_not_the_build(self) -> None:
+        self.assertNotEqual(build_mod.INSTANCE, build_mod.BUILD)
+
+    def test_a_second_process_gets_a_different_instance(self) -> None:
+        """Proven across real interpreters — two imports in one process would share the module."""
+        import subprocess  # noqa: PLC0415
+        import sys  # noqa: PLC0415
+
+        here = Path(build_mod.__file__).resolve().parent
+        ids = {
+            subprocess.run(
+                [sys.executable, "-c", "import build; print(build.INSTANCE)"],
+                cwd=here,
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout.strip()
+            for _ in range(2)
+        }
+        self.assertEqual(len(ids), 2, "each process must be distinguishable")
+
+    def test_the_instance_is_stable_within_a_process(self) -> None:
+        # Otherwise every fetch would look like a new enforcement point.
+        self.assertEqual(
+            build_mod.build_headers()["X-PromptForge-Pep-Instance"],
+            build_mod.build_headers()["X-PromptForge-Pep-Instance"],
+        )
 
 
 class FetchCarriesTheBuild(unittest.TestCase):

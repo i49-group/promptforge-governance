@@ -114,5 +114,61 @@ class FetchCarriesTheBuild(unittest.TestCase):
         self.assertEqual(captured.get("X-promptforge-pep-version"), build_mod.VERSION)
 
 
+class HeartbeatIsIndependentOfSessions(unittest.TestCase):
+    """The heartbeat has to run whether or not anyone talks to the agent.
+
+    It originally started inside `on_session_start`, so an idle gateway never contacted PromptForge
+    at all — making "governed and quiet" and "not governed" the same observation from our side,
+    which is the exact confusion P-121 exists to remove. It also meant a gateway holding broken
+    credentials looked healthy until someone happened to send it a message.
+    """
+
+    def setUp(self) -> None:
+        import __init__ as plugin  # noqa: PLC0415
+
+        self.plugin = plugin
+        plugin._refresh_stop.set()  # keep any thread we start from looping
+        self.addCleanup(plugin._refresh_stop.clear)
+
+    def test_registering_starts_the_heartbeat(self) -> None:
+        started: list[bool] = []
+        with mock.patch.object(self.plugin, "_start_refresh_loop", lambda: started.append(True)):
+            hooks: dict = {}
+
+            class Ctx:
+                def register_hook(self, name: str, fn: object) -> None:
+                    hooks[name] = fn
+
+            self.plugin.register(Ctx())
+
+        self.assertEqual(started, [True], "register() must start the heartbeat")
+        self.assertIn("pre_tool_call", hooks)
+
+    def test_the_loop_refreshes_before_it_waits(self) -> None:
+        """A restarted gateway must not look dead for a whole interval before its first fetch."""
+        calls: list[str] = []
+
+        class FakePdp:
+            def refresh(self) -> dict:
+                calls.append("refresh")
+                return {}
+
+        with mock.patch.object(self.plugin, "_get_pdp", lambda: FakePdp()):
+            with mock.patch.object(self.plugin, "_mark_ready", lambda meta: None):
+                # _refresh_stop is set, so this returns after exactly one pass.
+                self.plugin._refresh_loop(interval_s=999)
+
+        self.assertEqual(calls, ["refresh"])
+
+    def test_a_failing_first_refresh_does_not_escape(self) -> None:
+        # A network error at load must not take the gateway down with it.
+        def explode() -> object:
+            raise RuntimeError("promptforge unreachable")
+
+        with mock.patch.object(self.plugin, "_get_pdp", explode):
+            with self.assertLogs(self.plugin.logger, level="WARNING"):
+                self.plugin._refresh_loop(interval_s=999)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -192,13 +192,19 @@ def _mark_not_ready(exc: BaseException | str) -> None:
 
 
 def _refresh_loop(interval_s: float) -> None:
-    while not _refresh_stop.wait(interval_s):
+    # Refresh first, then wait. Started from register(), this first pass is the plugin's proof of
+    # life: it says the plugin loaded, holds working credentials, and can reach PromptForge —
+    # before any session exists to prove it. Waiting first would leave a freshly restarted gateway
+    # indistinguishable from a broken one for a full interval.
+    while True:
         try:
             meta = _get_pdp().refresh()
             _mark_ready(meta)
         except Exception as exc:  # noqa: BLE001 — never crash Hermes
             _mark_not_ready(exc)
             logger.warning("PromptForge refresh failed: %s", exc)
+        if _refresh_stop.wait(interval_s):
+            return
 
 
 def _start_refresh_loop() -> None:
@@ -484,3 +490,9 @@ def register(ctx: Any) -> None:
         "Registered promptforge-governance hooks (agent_key=%s)",
         os.environ.get("PF_AGENT_KEY", "?"),
     )
+    # Heartbeat from load, not from first session. Previously the loop started inside
+    # on_session_start, so an idle agent never contacted PromptForge at all — which makes "governed
+    # and quiet" and "not governed" the same observation from our side, the very confusion P-121
+    # exists to remove. It also means a gateway with broken credentials looked fine until someone
+    # happened to talk to it.
+    _start_refresh_loop()

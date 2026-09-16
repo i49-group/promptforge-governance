@@ -233,8 +233,10 @@ class DecisionReporterTests(unittest.TestCase):
         r = self._reporter(queue_max=1)
         r._ensure_worker = lambda: None  # nothing drains, so the queue stays full
         self.assertTrue(r.report(agent_key="a", tool_name="t", decision="allow"))
-        self.assertFalse(r.report(agent_key="a", tool_name="t", decision="allow"))
+        with self.assertLogs(reporter_mod.logger, level="WARNING") as logged:
+            self.assertFalse(r.report(agent_key="a", tool_name="t", decision="allow"))
         self.assertEqual(r.dropped, 1)
+        self.assertIn("queue full", "\n".join(logged.output))
 
     def test_a_transport_failure_is_counted_and_warned_not_raised(self):
         r = self._reporter()

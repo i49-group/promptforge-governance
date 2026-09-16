@@ -57,6 +57,7 @@ from typing import Dict, List, Optional, Sequence, Tuple
 FACET_CREDENTIAL = "credential"
 FACET_CROSS_PROFILE = "cross_profile"
 FACET_DELEGATE = "delegate"
+FACET_NOTIFY = "notify"
 FACET_SCHEDULE = "schedule"
 FACET_PROCESS = "process"
 FACET_NETWORK = "network"
@@ -124,9 +125,24 @@ _COMMAND_PATTERNS: List[Tuple[str, "re.Pattern[str]", str]] = [
     (FACET_SCHEDULE, re.compile(r"\bat\s+(now|\d{1,2}:\d{2})", re.I), "at(1) scheduling"),
     (FACET_SCHEDULE, re.compile(r"launchctl\s+(load|bootstrap|enable)", re.I),
      "launchd job activation"),
-    # Delegation to a peer, which moves the work outside this agent's policy entirely.
-    (FACET_DELEGATE, re.compile(r"fleet_msg|fleet/|message_agent|delegate_task", re.I),
-     "inter-agent messaging or delegation"),
+    # Peer contact, split in two because one pattern for both charged an approval for logging.
+    #
+    # Messaging a peer puts a message in its inbox; the peer decides whether to act, under its
+    # own policy, as it would for a human. That is notification and it is the high-volume shape:
+    # of 354 peer-contact commands measured across two agents, 107 were an agent posting
+    # "LOGGED: …" to a decision log. Gating those buys nothing and costs an approval each.
+    #
+    # Handing over work is the shape that matters, and it is rare — single digits over months.
+    # It is also the one capability that can move an act outside the caller's policy, so it is
+    # kept separate to be governed separately. Note this pattern catches the shell spelling; the
+    # native `delegate_task` tool is governed by its own name.
+    #
+    # Deliberately NOT keyed on the message body or a --task label: those are free text an agent
+    # writes about its own work, which makes them trivially avoidable and no basis for a control.
+    (FACET_NOTIFY, re.compile(r"fleet_msg|fleet/|message_agent", re.I),
+     "message sent to a peer agent"),
+    (FACET_DELEGATE, re.compile(r"delegate_task", re.I),
+     "work handed to a peer agent, which executes it under its own policy"),
     # Credential access.
     (FACET_CREDENTIAL,
      re.compile(r"\.env\b|credentials|id_rsa|id_ed25519|\.pem\b|_TOKEN|_SECRET|_KEY\b", re.I),

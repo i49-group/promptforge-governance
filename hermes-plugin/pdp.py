@@ -189,9 +189,21 @@ def evaluate_derived(
       * Combine most-restrictive-wins — deny over require_approval over allow, and the
         higher tier within a decision. A command that both reaches the network and writes
         a file is judged by whichever facet is governed more tightly.
-      * If the policy lists NO derived act, fall back to the base act. This is what lets
-        derivation ship to a fleet without denying a call: a policy tightens only when it
-        opts in by naming a derived act.
+      * The base act is always among the candidates, so **derivation is monotonic: naming a
+        facet can tighten a call's rule and can never loosen it.** This is a security
+        property, not a preference. Facets are matched against the command text the calling
+        agent composed, so a facet more permissive than its base act would be a permission
+        the agent could grant itself by writing the trigger string into a command — append
+        `# fleet_msg` and an ungated `terminal.notify` would answer for a `curl`. A facet
+        derived from agent-authored text can raise suspicion; it can never certify safety.
+        The cost is that carve-outs are impossible — an agent whose `terminal` is gated
+        cannot have `terminal.read` ungated — and that cost is correct, because such a
+        carve-out would be claimable the same way. Verified against live policy when this
+        was tightened: every published base act is ungated and every named facet is gated,
+        so no live decision changed.
+      * If the policy lists NO derived act, the base act's own decision stands unchanged.
+        This is what lets derivation ship to a fleet without denying a call: a policy
+        tightens only when it opts in by naming a derived act.
       * "Lists" means **named explicitly in `tools`** — deliberately not resolvable via a
         category. A category like `terminal.write` would otherwise catch every derived
         facet under that domain and silently opt a policy into narrowing nobody wrote,
@@ -255,9 +267,13 @@ def evaluate_derived(
         result["derived_facets"] = facets
         return result
 
+    # The base act is always a candidate, so a facet can only ever tighten its rule. See the
+    # monotonicity note in this function's docstring: facets are matched against text the
+    # calling agent wrote, so a facet looser than the base act would be one the agent could
+    # claim by writing the trigger string into a command.
     evaluated = [
         (act, evaluate_against_bundle(payload, act, pdp_state, correlation_id))
-        for act in listed
+        for act in [tool_name] + listed
     ]
     worst_act, worst = max(
         evaluated,
@@ -269,6 +285,10 @@ def evaluate_derived(
     result = dict(worst)
     reasons = list(result.get("reasons") or [])
     reasons.append(f"derived_act:{worst_act}")
+    if worst_act == tool_name:
+        # The base act was tighter than every facet the policy named. Said out loud because
+        # otherwise a facet that never changes an outcome looks like a working control.
+        reasons.append("derived_no_tighter_than_base:" + ",".join(listed))
     if len(listed) > 1:
         reasons.append("derived_considered:" + ",".join(listed))
     result["reasons"] = reasons

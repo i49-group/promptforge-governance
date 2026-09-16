@@ -21,6 +21,7 @@ from derive import (
     FACET_CROSS_PROFILE,
     FACET_DELEGATE,
     FACET_NETWORK,
+    FACET_NOTIFY,
     FACET_PROCESS,
     FACET_SCHEDULE,
     FACET_WRITE,
@@ -66,12 +67,19 @@ class FacetDetection(unittest.TestCase):
             facets, _ = derive_facets("terminal", {"command": command})
             self.assertIn(FACET_SCHEDULE, facets, command)
 
-    def test_delegation_over_the_shell(self) -> None:
+    def test_peer_contact_over_the_shell(self) -> None:
         # The observed bypass: denied the inter-agent bus, the agent used the fleet script.
+        # Reaching a peer this way is notification — the peer decides whether to act.
         facets, _ = derive_facets(
             "terminal", {"command": "python3 ~/.hermes/fleet/fleet_msg.py --to peer"}
         )
+        self.assertIn(FACET_NOTIFY, facets)
+        self.assertNotIn(FACET_DELEGATE, facets)
+
+    def test_handing_work_to_a_peer_over_the_shell(self) -> None:
+        facets, _ = derive_facets("terminal", {"command": "delegate_task --goal 'do the thing'"})
         self.assertIn(FACET_DELEGATE, facets)
+        self.assertNotIn(FACET_NOTIFY, facets)
 
     def test_credential_material(self) -> None:
         facets, _ = derive_facets("read_file", {"path": "/home/x/profiles/peer/.env"})
@@ -216,7 +224,7 @@ class MostRestrictiveWins(unittest.TestCase):
         # The case that started this: denied the inter-agent bus, then delivered the same
         # message through the fleet script over the shell.
         pol = policy(
-            {"terminal": OPEN, "terminal.delegate": DENIED, "message_agent": DENIED}
+            {"terminal": OPEN, "terminal.notify": DENIED, "message_agent": DENIED}
         )
         result = evaluate_derived(
             pol,
@@ -224,6 +232,56 @@ class MostRestrictiveWins(unittest.TestCase):
             args={"command": "python3 ~/.hermes/fleet/fleet_msg.py --to peer --message hi"},
         )
         self.assertEqual(result["decision"], "deny")
+
+    def test_messaging_a_peer_is_not_delegating_to_one(self) -> None:
+        """One pattern used to cover both, which charged an approval to write a log line.
+
+        Measured: of 354 peer-contact commands across two agents, 107 were an agent posting
+        "LOGGED: …" to a peer's decision log. Gating a message costs an approval and prevents
+        nothing, because the peer decides whether to act under its own policy either way.
+        Handing over work is the shape that can move an act outside the caller's policy, so
+        only that one is gated here — and this test fails if the two are recombined.
+        """
+        pol = policy({"terminal": OPEN, "terminal.notify": OPEN, "terminal.delegate": GATED})
+
+        logged = evaluate_derived(
+            pol,
+            "terminal",
+            args={
+                "command": "python3 ~/.hermes/fleet/fleet_msg.py --to peer --from me "
+                '--task decision_log --message "LOGGED: sequence 107 closed"'
+            },
+        )
+        self.assertEqual(logged["decision"], "allow")
+        # The notify facet was named and considered; it simply is not tighter than the base
+        # act here, which the reasons say out loud rather than leaving it to be inferred.
+        self.assertIn("terminal.notify", " ".join(logged["reasons"]))
+
+        handed_over = evaluate_derived(
+            pol, "terminal", args={"command": "delegate_task --goal 'update the templates'"}
+        )
+        self.assertEqual(handed_over["decision"], "require_approval")
+        self.assertIn("derived_act:terminal.delegate", handed_over["reasons"])
+
+    def test_a_message_that_also_hands_over_work_takes_the_tighter_answer(self) -> None:
+        # Both facets in one command. Most-restrictive-wins already covers this, but the
+        # delegation gate would be worthless if a message could carry work past it.
+        pol = policy({"terminal": OPEN, "terminal.notify": OPEN, "terminal.delegate": DENIED})
+        result = evaluate_derived(
+            pol,
+            "terminal",
+            args={"command": "fleet_msg.py --to peer --message hi && delegate_task --goal x"},
+        )
+        self.assertEqual(result["decision"], "deny")
+
+    def test_the_split_does_not_ungate_an_agent_that_gates_the_base_act(self) -> None:
+        # An agent with `terminal` itself gated must not gain an ungated path by the notify
+        # facet being open — the facet narrows a base act, it does not replace its rule.
+        pol = policy({"terminal": GATED, "terminal.notify": OPEN})
+        result = evaluate_derived(
+            pol, "terminal", args={"command": "fleet_msg.py --to peer --message hi"}
+        )
+        self.assertEqual(result["decision"], "require_approval")
 
     def test_fail_closed_still_precedes_derivation(self) -> None:
         # Narrowing must never become a route past the fail-closed state.

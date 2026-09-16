@@ -66,9 +66,26 @@ FACET_READ = "read"
 # Acts that name a mechanism rather than a capability, and are therefore worth narrowing.
 DERIVABLE_ACTS = ("terminal", "execute_code", "read_file", "write_file", "patch")
 
+# Acts that perform no capability of their own and invoke another act by name. These are a
+# harder case than `terminal`: a shell command at least has a facet worth deriving, whereas a
+# dispatcher's own name carries no information at all. Governing the wrapper as a name has only
+# two settings, and both are wrong — grant it and every act it can reach is ungoverned, refuse
+# it and the agent loses its entire dispatch path. Measured on two agents: 566 and 799 calls,
+# 32 and 30 distinct acts underneath, including live customer campaign sends that an approval
+# gate on the act's own name could never see.
+DISPATCH_ACTS = ("tool_call",)
+
+# The act name used when a dispatcher's target cannot be read. Matches no policy entry by
+# design, so it denies rather than passing as an unremarkable call.
+UNRESOLVED_DISPATCH = "<unresolved dispatch>"
+
 # Argument keys hosts use for the command or code body. Checked in order.
 _COMMAND_KEYS = ("command", "cmd", "script", "code", "input", "shell", "commands")
 _PATH_KEYS = ("path", "file", "file_path", "filename", "target", "paths")
+
+# Where a dispatcher carries the act it invokes, and that act's own arguments.
+_DISPATCH_NAME_KEYS = ("name", "tool", "tool_name")
+_DISPATCH_ARG_KEYS = ("arguments", "args", "input", "parameters")
 
 
 def _first_str(args: Dict, keys: Sequence[str]) -> Optional[str]:
@@ -191,6 +208,40 @@ def derive_facets(
         notes.append("unclassified" if (command or path) else "args_unavailable")
 
     return sorted(set(facets)), notes
+
+
+def dispatched_call(
+    tool_name: str, args: Optional[Dict]
+) -> Tuple[Optional[str], Optional[Dict]]:
+    """Return (act, args) for the act a dispatcher actually invokes, else (None, None).
+
+    Unwrapping, not narrowing. The result is a real act name, so it is evaluated as one rather
+    than as a facet of the wrapper — `tool_call{name: email_send_now}` is judged as
+    `email_send_now`.
+
+    Returns `("<unresolved dispatch>", None)` when the call is a dispatcher whose target cannot
+    be read. That is deliberately not `None`: a dispatch nobody can attribute is the one call
+    the policy definitely cannot govern, and it must reach the decision trail rather than pass
+    as an ordinary act. It will not match any policy entry, so it denies as unknown — which is
+    the correct answer to "run something, I won't say what".
+    """
+    base = (tool_name or "").strip()
+    if base not in DISPATCH_ACTS:
+        return None, None
+    if not isinstance(args, dict):
+        return UNRESOLVED_DISPATCH, None
+
+    inner = next(
+        (args[k] for k in _DISPATCH_NAME_KEYS if isinstance(args.get(k), str) and args[k].strip()),
+        None,
+    )
+    if not inner:
+        return UNRESOLVED_DISPATCH, None
+
+    inner_args = next(
+        (args[k] for k in _DISPATCH_ARG_KEYS if isinstance(args.get(k), dict)), None
+    )
+    return inner.strip(), inner_args
 
 
 def candidate_acts(tool_name: str, facets: Sequence[str]) -> List[str]:

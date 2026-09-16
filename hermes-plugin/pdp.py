@@ -24,10 +24,10 @@ from uuid import uuid4
 # "No module named 'pdp'" — the plugin does not load and the agent is silently ungoverned.
 try:
     from .actname import resolution_candidates
-    from .derive import candidate_acts, derive_facets
+    from .derive import candidate_acts, derive_facets, dispatched_call
 except ImportError:  # loaded as flat plugin directory on sys.path
     from actname import resolution_candidates  # type: ignore
-    from derive import candidate_acts, derive_facets  # type: ignore
+    from derive import candidate_acts, derive_facets, dispatched_call  # type: ignore
 
 
 class PdpError(Exception):
@@ -173,6 +173,7 @@ def evaluate_derived(
     agent_key: Optional[str] = None,
     pdp_state: str = "normal",
     correlation_id: Optional[str] = None,
+    _depth: int = 0,
 ) -> dict:
     """Evaluate a call against its derived acts, falling back to the base act.
 
@@ -202,7 +203,40 @@ def evaluate_derived(
         did; `args_unavailable`, `unclassified`, or `derived_unlisted` when it did not.
         Silent non-narrowing would be indistinguishable from having nothing to narrow,
         which is the failure mode this whole codebase is built against.
+      * A **dispatcher** (see DISPATCH_ACTS) is unwrapped first: the act it invokes is
+        evaluated as itself, and combined most-restrictive-wins with the wrapper's own
+        decision. Both are evaluated because that combination can only tighten — if the
+        wrapper is refused the call stays refused, and if the wrapper is granted the invoked
+        act is now governed where previously nothing was. There is no input under which
+        unwrapping permits something the wrapper alone would have permitted.
     """
+    if _depth == 0:
+        inner_act, inner_args = dispatched_call(tool_name, args)
+        if inner_act:
+            # The wrapper on its own name, with args withheld so this does not re-unwrap.
+            wrapper = evaluate_derived(
+                payload, tool_name, None, agent_key, pdp_state, correlation_id, _depth=1
+            )
+            # The act actually being performed, narrowed by its own arguments in turn — a
+            # dispatched `terminal` still derives its shell facets.
+            inner = evaluate_derived(
+                payload, inner_act, inner_args, agent_key, pdp_state, correlation_id, _depth=1
+            )
+            chosen_from, chosen = max(
+                (("dispatcher", wrapper), ("dispatched", inner)),
+                key=lambda pair: (
+                    _DECISION_RANK.get(pair[1].get("decision", "deny"), 2),
+                    TIER_RANK.get(pair[1].get("tier", "control"), 2),
+                ),
+            )
+            result = dict(chosen)
+            reasons = list(result.get("reasons") or [])
+            reasons.append(f"dispatched_act:{inner_act}")
+            reasons.append(f"decided_on:{chosen_from}")
+            result["reasons"] = reasons
+            result["dispatched_act"] = inner_act
+            return result
+
     facets, notes = derive_facets(tool_name, args, agent_key)
     candidates = candidate_acts(tool_name, facets)
     tools = payload.get("tools") or {}

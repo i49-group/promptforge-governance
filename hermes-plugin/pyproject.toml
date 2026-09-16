@@ -4,9 +4,14 @@ version = "0.1.0"
 description = "PromptForge policy enforcement point for Hermes agent hosts"
 readme = "README.md"
 license = { file = "../LICENSE" }
-# 3.10 is the floor: the module uses PEP 604 unions at runtime in annotations that are
-# evaluated (`BaseException | str`), not only under `from __future__ import annotations`.
-requires-python = ">=3.10"
+# 3.9 is the floor, and it is deliberate rather than incidental: stock macOS ships
+# python3 3.9, so the plugin drops onto a host with no venv and no install step. The PEP
+# 604 unions in the source (`BaseException | str`) are annotations only and every module
+# carries `from __future__ import annotations`, so they are never evaluated at runtime —
+# verified on 3.9 including `typing.get_type_hints`. The CI matrix tests the floor and
+# the ceiling; if a change makes 3.9 fail, that is a compatibility break to decide on
+# deliberately, not to discover on someone else's host.
+requires-python = ">=3.9"
 # No third-party runtime dependencies, by design. The plugin uses only urllib, hmac,
 # hashlib, json and threading from the standard library, so it can be dropped onto a
 # host without introducing a dependency tree into a security-critical path.

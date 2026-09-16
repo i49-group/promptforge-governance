@@ -24,9 +24,11 @@ from uuid import uuid4
 # "No module named 'pdp'" — the plugin does not load and the agent is silently ungoverned.
 try:
     from .actname import resolution_candidates
+    from .build import build_headers
     from .derive import candidate_acts, derive_facets, dispatched_call
 except ImportError:  # loaded as flat plugin directory on sys.path
     from actname import resolution_candidates  # type: ignore
+    from build import build_headers  # type: ignore
     from derive import candidate_acts, derive_facets, dispatched_call  # type: ignore
 
 
@@ -437,6 +439,9 @@ class GovernancePdp:
         headers = {
             "Authorization": f"Bearer {self.token}",
             "Accept": "application/json",
+            # Which build is enforcing. Sent on every fetch, including the conditional ones that
+            # answer 304, so the heartbeat continues while a bundle is unchanged (P-121).
+            **build_headers(),
         }
         cached_etag = self._etags.get(path) if allow_conditional else None
         if cached_etag:

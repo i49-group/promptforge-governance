@@ -236,13 +236,17 @@ class DecisionReporterTests(unittest.TestCase):
         self.assertFalse(r.report(agent_key="a", tool_name="t", decision="allow"))
         self.assertEqual(r.dropped, 1)
 
-    def test_a_transport_failure_is_counted_not_raised(self):
+    def test_a_transport_failure_is_counted_and_warned_not_raised(self):
         r = self._reporter()
         r._post = lambda payload: (_ for _ in ()).throw(OSError("connection refused"))
-        r.report(agent_key="a", tool_name="t", decision="deny")
-        self.assertTrue(r.drain())
+        # Asserted rather than allowed to print: the warning is the point (a failure logged at
+        # debug was invisible in production, P-125), and an unasserted log line is also test noise.
+        with self.assertLogs(reporter_mod.logger, level="WARNING") as logged:
+            r.report(agent_key="a", tool_name="t", decision="deny")
+            self.assertTrue(r.drain())
         self.assertEqual(r.failed, 1)
         self.assertEqual(r.sent, 0)
+        self.assertIn("connection refused", "\n".join(logged.output))
 
     def test_a_successful_write_is_counted_as_sent(self):
         r = self._reporter()

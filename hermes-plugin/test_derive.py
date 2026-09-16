@@ -14,15 +14,20 @@ is the exact defect class this plugin exists to surface, so it is asserted expli
 
 from __future__ import annotations
 
+import json
 import unittest
+from pathlib import Path
 
 from derive import (
+    DERIVABLE_ACTS,
+    DISPATCH_ACTS,
     FACET_CREDENTIAL,
     FACET_CROSS_PROFILE,
     FACET_DELEGATE,
     FACET_NETWORK,
     FACET_NOTIFY,
     FACET_PROCESS,
+    FACET_READ,
     FACET_SCHEDULE,
     FACET_WRITE,
     candidate_acts,
@@ -291,6 +296,39 @@ class MostRestrictiveWins(unittest.TestCase):
         )
         self.assertEqual(result["decision"], "deny")
         self.assertIn("pdp_fail_closed", result["reasons"])
+
+
+class SharedVocabulary(unittest.TestCase):
+    """The facet names are a contract, not an implementation detail.
+
+    PromptForge warns at publish time when a policy names an act no host can emit, and derived
+    acts are exactly the names no host emits — so without a shared list of them, that check
+    would report every legitimate derived act as dead. `conformance/derivation.json` is the
+    shared list. These assertions exist so the two copies cannot drift apart quietly, which is
+    the same defect the publish check is being built to catch.
+    """
+
+    def setUp(self) -> None:
+        path = Path(__file__).resolve().parent.parent / "conformance" / "derivation.json"
+        self.shared = json.loads(path.read_text())
+
+    def test_the_facets_match_the_shared_vocabulary(self) -> None:
+        declared = {
+            FACET_CREDENTIAL,
+            FACET_CROSS_PROFILE,
+            FACET_DELEGATE,
+            FACET_NOTIFY,
+            FACET_SCHEDULE,
+            FACET_PROCESS,
+            FACET_NETWORK,
+            FACET_WRITE,
+            FACET_READ,
+        }
+        self.assertEqual(declared, set(self.shared["facets"]))
+
+    def test_the_derivable_and_dispatch_acts_match(self) -> None:
+        self.assertEqual(set(DERIVABLE_ACTS), set(self.shared["derivable_acts"]))
+        self.assertEqual(set(DISPATCH_ACTS), set(self.shared["dispatch_acts"]))
 
 
 class CandidateNaming(unittest.TestCase):

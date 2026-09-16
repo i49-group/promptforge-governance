@@ -1,0 +1,29 @@
+{
+  "_readme": [
+    "The derivation vocabulary, shared so that a policy author and an enforcement point agree on",
+    "which act names are meaningful.",
+    "",
+    "A derived act is one the enforcement point synthesises from a broad act's arguments:",
+    "`terminal` carrying a `curl` becomes `terminal.network` as well. Those names are never sent",
+    "by a host, so any tool that checks a policy against a host's tool list would call every one",
+    "of them dead. This file is how such a check tells a legitimate derived act from a typo.",
+    "",
+    "Canonical here. `hermes-plugin/test_derive.py` asserts the Python constants match this file,",
+    "and it is mirrored into PromptForge's governance-pdp package for the publish-time check.",
+    "Adding a facet means adding it here first."
+  ],
+  "version": 1,
+  "facets": [
+    "credential",
+    "cross_profile",
+    "delegate",
+    "notify",
+    "schedule",
+    "process",
+    "network",
+    "write",
+    "read"
+  ],
+  "derivable_acts": ["terminal", "execute_code", "read_file", "write_file", "patch"],
+  "dispatch_acts": ["tool_call"]
+}

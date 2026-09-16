@@ -176,6 +176,16 @@ def inline_approval_enabled(payload: dict) -> bool:
     return bool(payload.get("inline_approval") is True)
 
 
+def report_decisions_enabled(payload: dict) -> bool:
+    """Whether this agent's policy asks the host to report its local decisions.
+
+    Defaults to False. Reporting sends act names off the host, so it is opt-in per
+    agent rather than a global default; and because the flag lives in the bundle,
+    an agent with no bundle reports nothing at all.
+    """
+    return bool(payload.get("report_decisions") is True)
+
+
 def resolve_tool_policy(payload: dict, tool_name: str) -> Optional[dict]:
     tools = payload.get("tools") or {}
     if tool_name in tools:

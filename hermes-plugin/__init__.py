@@ -13,6 +13,11 @@ We use "approve" only for PromptForge's `require_approval` decision, and only fo
 agents PromptForge has marked eligible. `deny` always blocks: letting a human wave
 through an act policy refuses outright is privilege escalation, which is a separate
 mechanism with its own binding and expiry.
+
+post_tool_call reports back to PromptForge, opt-in per agent via `report_decisions`.
+Decisions are reported at the point they are made; an escalated act is additionally
+reported once it has actually run, which is the only evidence available here that a
+human approved it.
 """
 
 from __future__ import annotations
@@ -21,16 +26,19 @@ import logging
 import os
 import threading
 import time
+from collections import OrderedDict
 from typing import Any, Optional
 
 try:
     from .pdp import GovernancePdp, PdpError
     from . import pdp as pdp_mod
     from . import messages as msg
+    from .reporter import DecisionReporter
 except ImportError:  # loaded as flat plugin directory on sys.path
     from pdp import GovernancePdp, PdpError  # type: ignore
     import pdp as pdp_mod  # type: ignore
     import messages as msg  # type: ignore
+    from reporter import DecisionReporter  # type: ignore
 
 logger = logging.getLogger("promptforge.governance")
 
@@ -48,6 +56,79 @@ _warned_user = False
 # long a policy *tightening* can go unnoticed. Loosening no longer waits for this
 # timer at all — a denial revalidates on the spot.
 DEFAULT_REFRESH_SECONDS = 300
+
+
+# Escalated acts awaiting a human answer, keyed by tool call. Bounded: an approval
+# nobody ever answers must not accumulate. Oldest is evicted, which loses only the
+# post-run confirmation for a very stale call — the require_approval row is already
+# recorded by then.
+_PENDING_MAX = 64
+_pending_lock = threading.Lock()
+_pending_escalations: "OrderedDict[str, dict]" = OrderedDict()
+
+_reporter: Optional[DecisionReporter] = None
+_reporter_lock = threading.Lock()
+
+
+def _get_reporter(pdp: GovernancePdp) -> DecisionReporter:
+    global _reporter
+    with _reporter_lock:
+        if _reporter is None:
+            _reporter = DecisionReporter(
+                base_url=pdp.base_url,
+                token=pdp.token,
+                environment=pdp.environment,
+            )
+        return _reporter
+
+
+def _reporting_enabled(pdp: GovernancePdp) -> bool:
+    bundle = pdp.bundle or {}
+    return pdp_mod.report_decisions_enabled(bundle.get("payload") or {})
+
+
+def _report(
+    pdp: GovernancePdp,
+    *,
+    tool_name: str,
+    decision: str,
+    reasons: Optional[list] = None,
+    correlation_id: Optional[str] = None,
+) -> None:
+    """Best-effort. Silent when the policy has not opted in, and never raises —
+    a tool call must not fail because we could not describe it."""
+    if not _reporting_enabled(pdp):
+        return
+    try:
+        _get_reporter(pdp).report(
+            agent_key=pdp.agent_key,
+            tool_name=tool_name,
+            decision=decision,
+            reasons=reasons or [],
+            correlation_id=correlation_id,
+            policy_version=pdp.bundle_version,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("PromptForge decision reporting skipped: %s", exc)
+
+
+def _escalation_key(tool_name: str, task_id: str, tool_call_id: str) -> str:
+    """Hermes passes tool_call_id to both hooks; the composite is a fallback for
+    hosts or tests that do not."""
+    return tool_call_id or f"{task_id}:{tool_name}"
+
+
+def _remember_escalation(key: str, info: dict) -> None:
+    with _pending_lock:
+        _pending_escalations[key] = info
+        _pending_escalations.move_to_end(key)
+        while len(_pending_escalations) > _PENDING_MAX:
+            _pending_escalations.popitem(last=False)
+
+
+def _take_escalation(key: str) -> Optional[dict]:
+    with _pending_lock:
+        return _pending_escalations.pop(key, None)
 
 
 def _inline_approval_allowed(pdp: GovernancePdp) -> bool:
@@ -181,6 +262,13 @@ def pre_tool_call(
 
         result = pdp.evaluate(name, correlation_id=task_id or None)
         if result["decision"] == "allow":
+            _report(
+                pdp,
+                tool_name=name,
+                decision="allow",
+                reasons=result.get("reasons") or [],
+                correlation_id=result.get("correlation_id"),
+            )
             return None
 
         # A denial is the strongest available signal that our copy of the policy may
@@ -192,12 +280,36 @@ def pre_tool_call(
             _mark_ready(meta)
             result = pdp.evaluate(name, correlation_id=task_id or None)
             if result["decision"] == "allow":
+                _report(
+                    pdp,
+                    tool_name=name,
+                    decision="allow",
+                    reasons=(result.get("reasons") or []) + ["revalidated"],
+                    correlation_id=result.get("correlation_id"),
+                )
                 return None
         except Exception as exc:  # noqa: BLE001 — keep the original decision
             logger.debug("PromptForge revalidation before block failed: %s", exc)
 
         if result["decision"] == "require_approval" and _inline_approval_allowed(pdp):
             scope = pdp_mod.category_key_for(name)
+            # Recorded as require_approval, not as an allow. Hermes decides what the
+            # human says; all we know here is that policy sent it to one.
+            _report(
+                pdp,
+                tool_name=name,
+                decision="require_approval",
+                reasons=(result.get("reasons") or []) + ["escalated_to_host_gate"],
+                correlation_id=result.get("correlation_id"),
+            )
+            _remember_escalation(
+                _escalation_key(name, task_id, str(kwargs.get("tool_call_id") or "")),
+                {
+                    "tool_name": name,
+                    "reasons": result.get("reasons") or [],
+                    "correlation_id": result.get("correlation_id"),
+                },
+            )
             return {
                 "action": "approve",
                 "message": msg.approval_prompt(
@@ -211,6 +323,15 @@ def pre_tool_call(
                 "rule_key": scope or name,
             }
 
+        # Only deny and require_approval reach here; allow returned above. Both are
+        # valid at the endpoint now, so the decision passes through unflattened.
+        _report(
+            pdp,
+            tool_name=name,
+            decision=result["decision"],
+            reasons=(result.get("reasons") or []) + ["blocked_by_host"],
+            correlation_id=result.get("correlation_id"),
+        )
         return {
             "action": "block",
             "message": msg.block_policy(
@@ -239,6 +360,46 @@ def pre_tool_call(
                 tool_name=name, agent_key=agent, exc=exc
             ),
         }
+
+
+def post_tool_call(
+    tool_name: str = "",
+    task_id: str = "",
+    tool_call_id: str = "",
+    **kwargs: Any,
+) -> None:
+    """Record that a human-gated act actually ran.
+
+    Hermes owns the approval prompt and does not hand us its verdict, but it only
+    reaches the tool if the answer was yes — so an escalated act arriving here is an
+    approval that was granted and used. This is also why reporting an approval
+    happens after the act rather than before it (Glen, 09-15-2026).
+
+    An escalation that never arrives here was declined or timed out, and shows up as
+    a require_approval row with no following run. We cannot yet tell those two apart;
+    doing so needs a verdict from Hermes's gate that it does not currently expose.
+    """
+    name = (tool_name or kwargs.get("name") or "").strip()
+    if not name:
+        return None
+
+    pending = _take_escalation(_escalation_key(name, task_id, tool_call_id))
+    if pending is None:
+        return None
+
+    try:
+        pdp = _get_pdp()
+    except Exception:  # noqa: BLE001
+        return None
+
+    _report(
+        pdp,
+        tool_name=name,
+        decision="allow",
+        reasons=(pending.get("reasons") or []) + ["human_approved", "ran"],
+        correlation_id=pending.get("correlation_id"),
+    )
+    return None
 
 
 def pre_llm_call(**kwargs: Any) -> Optional[dict]:
@@ -301,6 +462,7 @@ def register(ctx: Any) -> None:
     """Hermes plugin entrypoint."""
     ctx.register_hook("on_session_start", on_session_start)
     ctx.register_hook("pre_tool_call", pre_tool_call)
+    ctx.register_hook("post_tool_call", post_tool_call)
     ctx.register_hook("pre_llm_call", pre_llm_call)
     logger.info(
         "Registered promptforge-governance hooks (agent_key=%s)",

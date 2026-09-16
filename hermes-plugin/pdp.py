@@ -105,6 +105,7 @@ def evaluate_against_bundle(
             "bundle_version": version,
             "correlation_id": corr,
             "pdp_state": pdp_state,
+            "category": None,
         }
 
     tool_policy = resolve_tool_policy(payload, tool_name)
@@ -117,6 +118,7 @@ def evaluate_against_bundle(
             "bundle_version": version,
             "correlation_id": corr,
             "pdp_state": pdp_state,
+            "category": None,
         }
 
     if not tool_policy.get("granted", False):
@@ -130,6 +132,7 @@ def evaluate_against_bundle(
             "bundle_version": version,
             "correlation_id": corr,
             "pdp_state": pdp_state,
+            "category": tool_policy.get("category") or None,
         }
 
     tier = _max_tier(payload.get("default_tier"), tool_policy.get("tier"))
@@ -154,6 +157,9 @@ def evaluate_against_bundle(
         "bundle_version": version,
         "correlation_id": corr,
         "pdp_state": pdp_state,
+        # Declared on the entry or absent. Never inferred from the act's name: a host that
+        # groups approvals must be told the grouping, not left to guess it from a spelling.
+        "category": tool_policy.get("category") or None,
     }
 
 
@@ -237,10 +243,21 @@ def evaluate_derived(
 
 
 def category_key_for(tool_name: str) -> Optional[str]:
-    """The `{domain}.{read|write}` category an act falls under, or None if the name
-    has no domain/action shape. Kept separate from resolve_tool_policy so the
-    evaluator's return contract stays byte-identical to evaluate.ts (the
-    conformance vectors compare both languages against the same shape)."""
+    """DEPRECATED. The `{domain}.{read|write}` group parsed out of a dotted act name.
+
+    Sole remaining use is the `tool_categories` fallback in resolve_tool_policy — a default
+    policy for acts a bundle does not list. It is **not** the approval grain any more.
+
+    It was, and that was a mistake worth recording: deriving the grain from the act's name
+    required every name to look like `domain.action`, which is a convention hosts do not
+    follow. Hosts send `mcp__server__email_send_now` and `read_file`; neither has a dot, so
+    this returned None for every real call and group approval never once fired in
+    production. The grain is now declared on the policy entry (`category`), which works for
+    any name a host chooses to use and needs no convention at all.
+
+    Kept separate from resolve_tool_policy so the evaluator's return contract stays
+    byte-identical to evaluate.ts (the conformance vectors compare both languages against
+    the same shape)."""
     parts = tool_name.split(".")
     domain = parts[0]
     action = parts[1] if len(parts) > 1 else ""
@@ -285,6 +302,12 @@ def resolve_tool_policy(payload: dict, tool_name: str) -> Optional[dict]:
         if candidate in tools:
             return tools[candidate]
 
+    # DEPRECATED fallback: a default policy for acts the bundle does not list, keyed by a
+    # group parsed out of the act name. Only ever matches acts *named* in dotted form, which
+    # is not the form hosts send, so in practice it resolves nothing. Retained unchanged for
+    # bundles that relied on it; author acts explicitly instead. Do not extend to
+    # canonicalized names — that would grant a policy nobody wrote for acts nobody listed.
+    #
     # Split on every dot and take the second segment, matching
     # `const [domain, action] = toolName.split('.')` in evaluate.ts. Splitting
     # once and keeping the remainder differs for names like analytics.search.daily,

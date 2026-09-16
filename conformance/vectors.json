@@ -129,6 +129,62 @@
         }
       },
       "tool_categories": {}
+    },
+    "declared_groups": {
+      "org_id": "00000000-0000-0000-0000-0000000000dg",
+      "agent_key": "conformance",
+      "environment": "staging",
+      "issued_at": "2026-09-16T00:00:00.000Z",
+      "not_before": "2026-09-16T00:00:00.000Z",
+      "expires_at": "2026-09-16T06:00:00.000Z",
+      "grace_ms": 3600000,
+      "version": "conformance-groups",
+      "etag": "conformance-groups",
+      "default_tier": "velocity",
+      "tools": {
+        "mcp__example_server__email_send_now": {
+          "granted": true,
+          "tier": "efficiency",
+          "requires_approval": true,
+          "category": "email.write"
+        },
+        "mcp__example_server__email_test_send": {
+          "granted": true,
+          "tier": "efficiency",
+          "requires_approval": true,
+          "category": "email.write"
+        },
+        "write_file": {
+          "granted": true,
+          "tier": "efficiency",
+          "requires_approval": true,
+          "category": "native.file"
+        },
+        "terminal": {
+          "granted": true,
+          "tier": "control",
+          "requires_approval": true
+        },
+        "mcp__example_server__email_delete_all": {
+          "granted": false,
+          "tier": "control",
+          "requires_approval": true,
+          "category": "email.write"
+        },
+        "analytics.get_report": {
+          "granted": true,
+          "tier": "efficiency",
+          "requires_approval": true,
+          "category": "reporting.sensitive"
+        },
+        "mcp__example_server__email_get_inbox": {
+          "granted": true,
+          "tier": "efficiency",
+          "requires_approval": true,
+          "category": ""
+        }
+      },
+      "tool_categories": {}
     }
   },
   "cases": [
@@ -144,7 +200,8 @@
         "requires_approval": false,
         "reasons": [
           "tier:velocity"
-        ]
+        ],
+        "category": null
       }
     },
     {
@@ -160,7 +217,8 @@
         "reasons": [
           "tier:efficiency",
           "requires_approval"
-        ]
+        ],
+        "category": null
       }
     },
     {
@@ -176,7 +234,8 @@
         "reasons": [
           "tier:control",
           "requires_approval"
-        ]
+        ],
+        "category": null
       }
     },
     {
@@ -192,7 +251,8 @@
         "reasons": [
           "tier:control",
           "requires_approval"
-        ]
+        ],
+        "category": null
       }
     },
     {
@@ -208,7 +268,8 @@
         "reasons": [
           "not_granted",
           "tool:contacts.delete"
-        ]
+        ],
+        "category": null
       }
     },
     {
@@ -224,7 +285,8 @@
         "reasons": [
           "unknown_tool",
           "tool:billing.refund"
-        ]
+        ],
+        "category": null
       }
     },
     {
@@ -239,7 +301,8 @@
         "requires_approval": false,
         "reasons": [
           "tier:velocity"
-        ]
+        ],
+        "category": null
       }
     },
     {
@@ -254,7 +317,8 @@
         "requires_approval": false,
         "reasons": [
           "tier:velocity"
-        ]
+        ],
+        "category": null
       }
     },
     {
@@ -269,7 +333,8 @@
         "requires_approval": false,
         "reasons": [
           "tier:velocity"
-        ]
+        ],
+        "category": null
       }
     },
     {
@@ -285,7 +350,8 @@
         "reasons": [
           "tier:efficiency",
           "requires_approval"
-        ]
+        ],
+        "category": null
       }
     },
     {
@@ -301,7 +367,8 @@
         "reasons": [
           "tier:efficiency",
           "requires_approval"
-        ]
+        ],
+        "category": null
       }
     },
     {
@@ -317,7 +384,8 @@
         "reasons": [
           "not_granted",
           "tool:vault.get_secret"
-        ]
+        ],
+        "category": null
       }
     },
     {
@@ -332,7 +400,8 @@
         "requires_approval": false,
         "reasons": [
           "tier:velocity"
-        ]
+        ],
+        "category": null
       }
     },
     {
@@ -348,7 +417,8 @@
         "reasons": [
           "unknown_tool",
           "tool:undeclared_native_act"
-        ]
+        ],
+        "category": null
       }
     },
     {
@@ -364,7 +434,8 @@
         "reasons": [
           "unknown_tool",
           "tool:malformed."
-        ]
+        ],
+        "category": null
       }
     },
     {
@@ -379,7 +450,8 @@
         "requires_approval": false,
         "reasons": [
           "tier:velocity"
-        ]
+        ],
+        "category": null
       }
     },
     {
@@ -394,7 +466,8 @@
         "requires_approval": false,
         "reasons": [
           "tier:velocity"
-        ]
+        ],
+        "category": null
       }
     },
     {
@@ -409,7 +482,8 @@
         "requires_approval": false,
         "reasons": [
           "tier:velocity"
-        ]
+        ],
+        "category": null
       }
     },
     {
@@ -425,7 +499,8 @@
         "reasons": [
           "unknown_tool",
           "tool:email.get_campaigns"
-        ]
+        ],
+        "category": null
       }
     },
     {
@@ -440,7 +515,8 @@
         "requires_approval": true,
         "reasons": [
           "pdp_fail_closed"
-        ]
+        ],
+        "category": null
       }
     },
     {
@@ -456,7 +532,8 @@
         "reasons": [
           "tier:velocity",
           "grace_period"
-        ]
+        ],
+        "category": null
       }
     },
     {
@@ -472,7 +549,8 @@
         "reasons": [
           "tier:velocity",
           "using_cached_bundle"
-        ]
+        ],
+        "category": null
       }
     },
     {
@@ -489,7 +567,8 @@
           "tier:efficiency",
           "grace_period",
           "requires_approval"
-        ]
+        ],
+        "category": null
       }
     },
     {
@@ -505,7 +584,8 @@
         "reasons": [
           "unknown_tool",
           "tool:billing.refund"
-        ]
+        ],
+        "category": null
       }
     },
     {
@@ -520,7 +600,8 @@
         "requires_approval": false,
         "reasons": [
           "tier:velocity"
-        ]
+        ],
+        "category": null
       }
     },
     {
@@ -535,7 +616,8 @@
         "requires_approval": false,
         "reasons": [
           "tier:velocity"
-        ]
+        ],
+        "category": null
       }
     },
     {
@@ -550,7 +632,8 @@
         "requires_approval": false,
         "reasons": [
           "tier:velocity"
-        ]
+        ],
+        "category": null
       }
     },
     {
@@ -566,7 +649,8 @@
         "reasons": [
           "not_granted",
           "tool:mcp__example_server__contacts_delete"
-        ]
+        ],
+        "category": null
       }
     },
     {
@@ -582,7 +666,8 @@
         "reasons": [
           "unknown_tool",
           "tool:mcp_example_server_email_send_now"
-        ]
+        ],
+        "category": null
       }
     },
     {
@@ -597,7 +682,8 @@
         "requires_approval": false,
         "reasons": [
           "tier:velocity"
-        ]
+        ],
+        "category": null
       }
     },
     {
@@ -613,7 +699,8 @@
         "reasons": [
           "unknown_tool",
           "tool:mcp__example_server__vault_read_secret"
-        ]
+        ],
+        "category": null
       }
     },
     {
@@ -629,7 +716,160 @@
         "reasons": [
           "tier:efficiency",
           "requires_approval"
-        ]
+        ],
+        "category": null
+      }
+    },
+    {
+      "id": "declared-group-on-prefixed-act",
+      "why": "A host-sent name carries the group the policy declared. This is the case that never worked: the grain used to be parsed out of the act name, and no name a host sends has the dot that parse needed.",
+      "bundle": "declared_groups",
+      "pdp_state": "normal",
+      "tool_name": "mcp__example_server__email_send_now",
+      "expect": {
+        "decision": "require_approval",
+        "tier": "efficiency",
+        "requires_approval": true,
+        "reasons": [
+          "tier:efficiency",
+          "requires_approval"
+        ],
+        "category": "email.write"
+      }
+    },
+    {
+      "id": "declared-group-shared-across-acts",
+      "why": "A second act in the same group returns the same key, which is what lets one approval cover a chain instead of prompting per act.",
+      "bundle": "declared_groups",
+      "pdp_state": "normal",
+      "tool_name": "mcp__example_server__email_test_send",
+      "expect": {
+        "decision": "require_approval",
+        "tier": "efficiency",
+        "requires_approval": true,
+        "reasons": [
+          "tier:efficiency",
+          "requires_approval"
+        ],
+        "category": "email.write"
+      }
+    },
+    {
+      "id": "declared-group-on-native-act",
+      "why": "`write_file` has no domain and no action, so no naming rule could ever place it in a group. Declaring it works anyway \u2014 the point of moving the grain off the name.",
+      "bundle": "declared_groups",
+      "pdp_state": "normal",
+      "tool_name": "write_file",
+      "expect": {
+        "decision": "require_approval",
+        "tier": "efficiency",
+        "requires_approval": true,
+        "reasons": [
+          "tier:efficiency",
+          "requires_approval"
+        ],
+        "category": "native.file"
+      }
+    },
+    {
+      "id": "no-declared-group-stands-alone",
+      "why": "An entry that declares no group returns null, and the host approves that act on its own. Grain is opt-in; omitting it must never widen an approval.",
+      "bundle": "declared_groups",
+      "pdp_state": "normal",
+      "tool_name": "terminal",
+      "expect": {
+        "decision": "require_approval",
+        "tier": "control",
+        "requires_approval": true,
+        "reasons": [
+          "tier:control",
+          "requires_approval"
+        ],
+        "category": null
+      }
+    },
+    {
+      "id": "declared-group-survives-refusal",
+      "why": "A refused act still reports its group, so a host can say which group the refusal belongs to. The refusal itself is unchanged.",
+      "bundle": "declared_groups",
+      "pdp_state": "normal",
+      "tool_name": "mcp__example_server__email_delete_all",
+      "expect": {
+        "decision": "deny",
+        "tier": "control",
+        "requires_approval": true,
+        "reasons": [
+          "not_granted",
+          "tool:mcp__example_server__email_delete_all"
+        ],
+        "category": "email.write"
+      }
+    },
+    {
+      "id": "declared-group-beats-what-the-name-implies",
+      "why": "The old parse would have called `analytics.get_report` a read in group `analytics.read`. The declaration says `reporting.sensitive` and wins. Names carry no authority over grouping.",
+      "bundle": "declared_groups",
+      "pdp_state": "normal",
+      "tool_name": "analytics.get_report",
+      "expect": {
+        "decision": "require_approval",
+        "tier": "efficiency",
+        "requires_approval": true,
+        "reasons": [
+          "tier:efficiency",
+          "requires_approval"
+        ],
+        "category": "reporting.sensitive"
+      }
+    },
+    {
+      "id": "unknown-act-has-no-group",
+      "why": "An act the bundle does not list is refused with no group, because there is no entry to have declared one.",
+      "bundle": "declared_groups",
+      "pdp_state": "normal",
+      "tool_name": "mcp__example_server__email_unlisted",
+      "expect": {
+        "decision": "deny",
+        "tier": "control",
+        "requires_approval": true,
+        "reasons": [
+          "unknown_tool",
+          "tool:mcp__example_server__email_unlisted"
+        ],
+        "category": null
+      }
+    },
+    {
+      "id": "fail-closed-has-no-group",
+      "why": "With no usable bundle there is no entry and therefore no group. A refusal must never be widened into a group approval.",
+      "bundle": "declared_groups",
+      "pdp_state": "fail_closed",
+      "tool_name": "mcp__example_server__email_send_now",
+      "expect": {
+        "decision": "deny",
+        "tier": "control",
+        "requires_approval": true,
+        "reasons": [
+          "pdp_fail_closed"
+        ],
+        "category": null
+      }
+    },
+    {
+      "id": "empty-group-string-is-no-group",
+      "why": "An empty group must read as absent, not as a group named \"\" that every cleared act would share. The two languages disagree here by default, so this is vectored rather than left to each implementation.",
+      "bundle": "declared_groups",
+      "pdp_state": "normal",
+      "tool_name": "mcp__example_server__email_get_inbox",
+      "expect": {
+        "decision": "require_approval",
+        "tier": "efficiency",
+        "requires_approval": true,
+        "reasons": [
+          "tier:efficiency",
+          "requires_approval"
+        ],
+        "category": null
       }
     }
   ]

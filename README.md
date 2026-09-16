@@ -26,7 +26,8 @@ Enforcement is code on the **tool path**:
 
 ```
 agent wants tool → PEP plugin → PDP.evaluate(signed bundle) → allow | require_approval | deny → executor
-                   └─ receives the tool NAME; arguments are not evaluated ─┘
+                   └─ decides on the act NAME; arguments are read only to
+                      make that name more specific, never as policy input ─┘
 ```
 
 If the host never reaches the executor on deny, "ignore PromptForge" does nothing — **provided** the
@@ -40,6 +41,22 @@ automatic, and three of them are properties of your host rather than of this plu
 **Tool dispatch, by name.** On each `pre_tool_call` the plugin resolves the tool name against a
 signed policy bundle and returns allow, require_approval, or deny. On deny the host does not reach
 the executor.
+
+**Act names are yours, and matching is literal.** A policy entry's key is the tool name your host
+passes to `evaluate()`, character for character. There is no naming convention to adopt and nothing
+is transformed: if your runtime dispatches `read_file` and `mcp__acme_crm__email_send_now`, those
+are the two keys.
+
+The cost of that simplicity is worth stating plainly, because it is a silent-failure shape. **A key
+that matches no tool your host can send is not rejected — it is inert.** It grants nothing, denies
+nothing, and is indistinguishable in every surface from a rule that works, so a policy can look
+comprehensive while governing nothing. Author act names from your runtime's own tool registration
+output rather than by hand, and treat an act with no decisions recorded against it as suspect.
+
+Optionally, an entry may declare a `category` — an approval group. When an act needs approval, a
+host may apply one answer to the whole group instead of asking per act in a chain. The group is
+declared on the entry, never inferred from the act's name, so it works for a bare `read_file` as
+well as for a long MCP name.
 
 **Availability failures close, not open.** The bundle is signed, cached, and carries an expiry. If
 the governance server is unreachable the plugin serves the cached bundle until expiry, then a grace

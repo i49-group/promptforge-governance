@@ -305,7 +305,10 @@ def pre_tool_call(
             logger.debug("PromptForge revalidation before block failed: %s", exc)
 
         if result["decision"] == "require_approval" and _inline_approval_allowed(pdp):
-            scope = pdp_mod.category_key_for(name)
+            # The group the policy declared for this act, or None. Previously parsed out of
+            # the act's name, which meant it resolved for no name a host actually sends and
+            # group approval never fired once. Declared grain works for any name.
+            scope = result.get("category")
             # Recorded as require_approval, not as an allow. Hermes decides what the
             # human says; all we know here is that policy sent it to one.
             _report(

@@ -149,6 +149,9 @@ export function createGovernancePdp(options: PdpOptions): GovernancePdp {
           bundle_version: 'none',
           correlation_id: req.correlation_id || 'no-bundle',
           pdp_state: 'fail_closed',
+          // No bundle means no entry, so no group. A refusal must never be widened into a
+          // group approval.
+          category: null,
         };
       }
       return evaluateAgainstBundle(

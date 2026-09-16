@@ -1,81 +1,87 @@
 {
-  "agent_key": "leo",
-  "display_name": "Leo — Marketing AI",
-  "digital_worker_email": "leo@agents.example.com",
+  "_readme": [
+    "Act policy for one agent, ready to paste into New package -> Import Act from platform inventory JSON.",
+    "",
+    "ONE RULE: each key is the tool name your host sends to evaluate(), character for character.",
+    "Matching is literal. There is no naming convention to satisfy and no transformation applied.",
+    "If your host sends 'mcp__acme__email_send_now', that is the key. If it sends 'read_file', that is the key.",
+    "A key that matches no tool your host can send is not an error and not a grant — it simply never applies.",
+    "",
+    "'category' is optional. Acts sharing a category are approved together, so one answer clears a chain",
+    "instead of prompting for each act. Omit it and the act is approved on its own.",
+    "",
+    "This _readme key is ignored by the importer."
+  ],
+  "agent_key": "marketing_assistant",
+  "display_name": "Marketing Assistant",
+  "digital_worker_email": "marketing@agents.example.com",
   "platform": "example_ops",
   "default_tier": "velocity",
   "tools": {
-    "calendar.get_events": {
+    "read_file": {
       "tier": "velocity",
       "requires_approval": false,
       "granted": true
     },
-    "calendar.create_event": {
+    "write_file": {
       "tier": "efficiency",
+      "requires_approval": true,
+      "granted": true,
+      "category": "files.write"
+    },
+    "search_files": {
+      "tier": "velocity",
+      "requires_approval": false,
+      "granted": true
+    },
+    "web_search": {
+      "tier": "velocity",
+      "requires_approval": false,
+      "granted": true
+    },
+    "terminal": {
+      "tier": "control",
       "requires_approval": true,
       "granted": true
     },
-    "calendar.update_event": {
+    "mcp__acme_crm__contacts_get_segments": {
+      "tier": "velocity",
+      "requires_approval": false,
+      "granted": true
+    },
+    "mcp__acme_crm__contacts_update_tags": {
       "tier": "efficiency",
       "requires_approval": true,
-      "granted": true
+      "granted": true,
+      "category": "contacts.write"
     },
-    "campaign.get_clarity_insights": {
-      "tier": "velocity",
-      "requires_approval": false,
-      "granted": true
-    },
-    "campaign.refresh_ad_data": {
-      "tier": "velocity",
-      "requires_approval": false,
-      "granted": true
-    },
-    "funnel.analytics_read": {
-      "tier": "velocity",
-      "requires_approval": false,
-      "granted": true
-    },
-    "funnel.create": {
-      "tier": "velocity",
-      "requires_approval": false,
-      "granted": true
-    },
-    "funnel.generate_page": {
-      "tier": "velocity",
-      "requires_approval": false,
-      "granted": true
-    },
-    "funnel.regenerate_step": {
-      "tier": "velocity",
-      "requires_approval": false,
-      "granted": true
-    },
-    "funnel.publish": {
+    "mcp__acme_crm__contacts_bulk_segment": {
       "tier": "efficiency",
       "requires_approval": true,
-      "granted": true
+      "granted": true,
+      "category": "contacts.write"
     },
-    "funnel.update_checkout_config": {
-      "tier": "efficiency",
-      "requires_approval": true,
-      "granted": true
-    }
-  },
-  "tool_categories": {
-    "calendar.read": {
+    "mcp__acme_crm__email_get_campaigns": {
       "tier": "velocity",
       "requires_approval": false,
       "granted": true
     },
-    "calendar.write": {
+    "mcp__acme_crm__email_test_send": {
       "tier": "efficiency",
       "requires_approval": true,
-      "granted": true
+      "granted": true,
+      "category": "email.send"
     },
-    "analytics.read": {
-      "tier": "velocity",
-      "requires_approval": false,
-      "granted": true
+    "mcp__acme_crm__email_send_now": {
+      "tier": "control",
+      "requires_approval": true,
+      "granted": true,
+      "category": "email.send"
+    },
+    "mcp__acme_crm__email_delete_campaign": {
+      "tier": "control",
+      "requires_approval": true,
+      "granted": false
     }
   }
 }

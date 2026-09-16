@@ -33,6 +33,12 @@ export function resolveToolPolicy(
     }
   }
 
+  // DEPRECATED fallback: a default policy for acts the bundle does not list, keyed by a
+  // `{domain}.{read|write}` group parsed out of the act name. It only ever works for acts
+  // *named* in dotted form, which is not the form hosts send, so in practice it resolves
+  // nothing. Retained unchanged for bundles that relied on it; author acts explicitly
+  // instead. Do not extend this to canonicalized names — that would grant a policy nobody
+  // wrote for acts nobody listed.
   const [domain, action] = toolName.split('.');
   if (!domain || !action) return null;
 
@@ -65,6 +71,7 @@ export function evaluateAgainstBundle(
       bundle_version: payload.version,
       correlation_id,
       pdp_state: pdpState,
+      category: null,
     };
   }
 
@@ -78,6 +85,7 @@ export function evaluateAgainstBundle(
       bundle_version: payload.version,
       correlation_id,
       pdp_state: pdpState,
+      category: null,
     };
   }
 
@@ -90,6 +98,7 @@ export function evaluateAgainstBundle(
       bundle_version: payload.version,
       correlation_id,
       pdp_state: pdpState,
+      category: toolPolicy.category || null,
     };
   }
 
@@ -110,5 +119,8 @@ export function evaluateAgainstBundle(
     bundle_version: payload.version,
     correlation_id,
     pdp_state: pdpState,
+    // Declared on the entry or absent. Never inferred from the act's name: a host that
+    // groups approvals must be told the grouping, not left to guess it from a spelling.
+    category: toolPolicy.category || null,
   };
 }

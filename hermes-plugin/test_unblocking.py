@@ -26,6 +26,15 @@ def _pdp_with_expiry(expires_at: str) -> GovernancePdp:
 
 
 class CategoryKeyTests(unittest.TestCase):
+    """Covers the DEPRECATED name-parsed category, which now serves only the
+    `tool_categories` fallback — a default policy for acts a bundle does not list.
+
+    It is no longer the approval grain. That moved to a `category` declared on the policy
+    entry, because parsing it out of the name required act names to look like
+    `domain.action`, resolved for no name a host actually sends, and could never work for a
+    native name like `read_file`. See test_gate_directives.
+    """
+
     def test_write_acts_resolve_to_write_category(self):
         self.assertEqual(pdp_mod.category_key_for("email.send_now"), "email.write")
 

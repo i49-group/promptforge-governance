@@ -53,6 +53,7 @@ class ConformanceTests(unittest.TestCase):
                     "tier": result["tier"],
                     "requires_approval": result["requires_approval"],
                     "reasons": result["reasons"],
+                    "category": result["category"],
                 }
                 self.assertEqual(actual, case["expect"], msg=case["why"])
 

@@ -70,6 +70,7 @@ describe('conformance vectors', () => {
       tier: result.tier,
       requires_approval: result.requires_approval,
       reasons: result.reasons,
+      category: result.category,
     }).toEqual(vector.expect);
   });
 });

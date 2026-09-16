@@ -27,8 +27,15 @@ gate = _load_gate()
 
 
 class FakePdp:
-    def __init__(self, decision: str, *, inline_approval=None, tier="efficiency"):
-        self.agent_key = "alex"
+    def __init__(
+        self,
+        decision: str,
+        *,
+        inline_approval=None,
+        tier="efficiency",
+        category=None,
+    ):
+        self.agent_key = "example_agent"
         self._decision = decision
         self.refresh_calls = 0
         payload = {"version": "v1"}
@@ -36,6 +43,9 @@ class FakePdp:
             payload["inline_approval"] = inline_approval
         self.bundle = {"payload": payload}
         self._tier = tier
+        # The approval group the policy declared for this act, as the evaluator now
+        # returns it. None means the act is approved on its own.
+        self._category = category
 
     def refresh(self):
         self.refresh_calls += 1
@@ -52,6 +62,7 @@ class FakePdp:
             "reasons": [f"tier:{self._tier}"],
             "bundle_version": "v1",
             "pdp_state": "normal",
+            "category": self._category,
         }
 
 
@@ -94,40 +105,50 @@ class GateDirectiveTests(unittest.TestCase):
         self.assertEqual(result["action"], "approve")
         self.assertIn("Approval needed", result["message"])
 
-    def test_escalation_uses_category_grain_so_one_answer_clears_the_chain(self):
-        result = self._run(FakePdp("require_approval", inline_approval=True))
+    def test_declared_group_means_one_answer_clears_the_chain(self):
+        result = self._run(
+            FakePdp("require_approval", inline_approval=True, category="email.write")
+        )
         self.assertEqual(result["rule_key"], "email.write")
 
-    def test_domainless_act_falls_back_to_the_act_itself(self):
-        result = self._run(
-            FakePdp("require_approval", inline_approval=True), tool="hermes_native_act"
-        )
-        self.assertEqual(result["rule_key"], "hermes_native_act")
-
-    def test_category_grain_does_not_reach_a_prefixed_mcp_act(self):
+    def test_declared_group_reaches_a_prefixed_mcp_act(self):
         """
-        Documents a live gap rather than a desired behaviour.
+        The case group approval was built for, which never once worked in production.
 
-        Category grain is derived by splitting the act name on a dot. Hosts emit MCP acts
-        as `mcp__<server>__<domain>_<action>` — no dot — so the category never resolves and
-        each act must be approved individually. The test above passes because it uses the
-        dotted spelling, which policies are *written* in and which hosts never *send*.
+        The grain used to be derived by splitting the act name on a dot. Hosts send MCP acts
+        as `mcp__<server>__<domain>_<action>` — no dot — so the derivation returned nothing
+        for every real call and each act was approved individually regardless. The old test
+        passed only because its fixture used the dotted spelling, which policies were
+        *written* in and hosts never *send*: a suite exercising only the form that works
+        cannot see the form that does not.
 
-        That is the same shape as the package-import failure: a suite that only exercises
-        the form which works cannot see the form which does not. Asserting the gap keeps it
-        visible until act-name canonicalization maps the emitted spelling onto the stored
-        one; at that point this test should fail, and the fix is to invert it.
+        The grain is now declared on the policy entry, so the act's spelling is irrelevant.
         """
         result = self._run(
-            FakePdp("require_approval", inline_approval=True),
+            FakePdp("require_approval", inline_approval=True, category="email.write"),
             tool="mcp__example_server__email_send_now",
         )
-        self.assertEqual(result["rule_key"], "mcp__example_server__email_send_now")
-        self.assertNotEqual(
-            result["rule_key"],
-            "email.write",
-            "if this now resolves to a category, canonicalization has landed — invert this test",
+        self.assertEqual(result["rule_key"], "email.write")
+
+    def test_declared_group_reaches_a_native_act_with_no_domain(self):
+        """`write_file` has no domain and no action. No naming rule could ever place it in
+        a group; a declaration can. This is why the grain moved off the name."""
+        result = self._run(
+            FakePdp("require_approval", inline_approval=True, category="native.file"),
+            tool="write_file",
         )
+        self.assertEqual(result["rule_key"], "native.file")
+
+    def test_act_without_a_declared_group_is_approved_on_its_own(self):
+        """Grain is opt-in. Omitting it must narrow to the single act, never widen —
+        an approval the operator did not ask to share is privilege escalation."""
+        for tool in ("email.send_now", "hermes_native_act",
+                     "mcp__example_server__email_send_now"):
+            with self.subTest(tool=tool):
+                result = self._run(
+                    FakePdp("require_approval", inline_approval=True), tool=tool
+                )
+                self.assertEqual(result["rule_key"], tool)
 
     def test_denial_revalidates_once_before_refusing(self):
         pdp = FakePdp("deny")

@@ -45,7 +45,7 @@ Everything lives in **your organization’s database**. There is no code-shipped
 1. **Role:** `org_admin` (or `owner` / `super_admin`) on the PromptForge organization that will own the agents.  
 2. **Plan:** AI Governance / MCP features enabled for your plan (ask your PromptForge contact if the Admin → AI Governance page is missing).  
 3. **agent_keys:** Agree with your engineering team on the IDs your platforms already use (or will use).  
-4. **Tool inventory (recommended):** A JSON list of tool names your platform exposes for each agent (names must match what the runtime sends to evaluate).
+4. **Tool inventory (strongly recommended):** The list of tool names your platform sends to `evaluate()` for each agent — ideally exported by your engineering team from the runtime itself rather than written by hand. Policy matching is literal, and a name that matches nothing is silently inert rather than rejected, so this list is what keeps a policy from looking complete while governing nothing. See [Naming acts](#naming-acts--the-only-rule).
 
 ---
 
@@ -98,7 +98,9 @@ After create:
 2. Open **Act policy** — for blank mode, add tools then **Publish**. For import, review tiers and publish if you left “Publish Act immediately” unchecked.  
 3. Edit Talk content in **Context Manager** (link from Package tab).
 
-Tool names in Act must match what your PEP sends to evaluate. Mismatches deny. Schema + paste-ready examples: [Appendix A](#appendix-a--importable-package-json).
+Tool names in Act must be exactly what your PEP sends to `evaluate()` — a name that matches
+nothing never applies, and nothing warns you. See [Naming acts](#naming-acts--the-only-rule).
+Schema and paste-ready examples: [Appendix A](#appendix-a--importable-package-json).
 
 ---
 
@@ -130,13 +132,58 @@ If a package has no Talk layers, use **Create Talk stubs** on the Package tab, o
 
 **Path:** Profile → **Act policy**
 
-For each tool:
+### Naming acts — the only rule
+
+> **Use the tool name your host sends to `evaluate()`, character for character.**
+
+Matching is literal. There is no naming convention to satisfy, nothing is transformed, and
+whatever your platform calls its tools is what you write down.
+
+| Your host sends | You write |
+|---|---|
+| `read_file` | `read_file` |
+| `terminal` | `terminal` |
+| `mcp__acme_crm__email_send_now` | `mcp__acme_crm__email_send_now` |
+| `Calendar.CreateEvent` | `Calendar.CreateEvent` (case is preserved and significant) |
+
+**A name that matches nothing is not an error.** It is not rejected, and it does not grant
+anything — it simply never applies, while looking in every screen exactly like a rule that
+works. So the one thing worth checking before you publish is that each name is really the
+name your host sends. Get the list from your engineering team, or from your host's tool
+registration log, rather than from memory.
+
+<details>
+<summary>Legacy: a shorthand some older policies use</summary>
+
+Policies written before this was documented sometimes name MCP acts in a dotted shorthand —
+`email.send_now` for `mcp__acme_crm__email_send_now`. The evaluator still accepts it: an act
+is resolved by trying the exact name first, then that shorthand. Two consequences worth
+knowing:
+
+- Server identity is dropped by the shorthand, so if two MCP servers both expose
+  `email_send_now`, one shorthand entry governs both. Use exact names when they must differ.
+- The shorthand is compatibility only. Write exact names for anything new.
+
+The older `tool_categories` block — a default policy for unlisted acts, keyed by a group
+parsed out of the act name — is deprecated for the same reason: it only matched acts *named*
+in the shorthand, which is not the form hosts send. List acts explicitly instead.
+
+</details>
+
+### Per-act fields
 
 | Field | Meaning |
 |-------|---------|
 | **granted** | If false, evaluate → deny (tool not in the agent’s inventory for governance). |
 | **tier** | `velocity` (low risk) · `efficiency` · `control` (high risk). Used for reporting and host UX. |
 | **requires_approval** | If true, evaluate → require_approval (your host must get a human OK before execute). |
+| **category** *(optional)* | An approval group. Acts sharing a group are approved together, so one answer clears a chain instead of prompting for each act. Any string; group names are yours to choose. Leave blank to approve the act on its own. |
+
+**About approval groups.** If an agent needs three steps to send a campaign, putting all
+three in `email.send` means the human is asked once. The group is a property you declare, not
+something inferred from the tool's name — so it works for `read_file` just as well as for a
+long MCP name. Only hosts that support group approval use it; others ask per act, which is
+always safe.
 
 Also set:
 
@@ -251,7 +298,7 @@ For each agent_key:
 
 - [ ] Profile exists and status is **active**  
 - [ ] Talk: four layers (or intentional subset) tagged `agent:<key>`, content reviewed  
-- [ ] Act: published policy; tool names match platform inventory  
+- [ ] Act: published policy; **every** tool name is exactly one your host sends — check the list, since a name that matches nothing looks identical to one that works  
 - [ ] Org service credential issued to the host team only  
 - [ ] Activity shows successful pack + bundle pull  
 - [ ] Host footer (or equivalent) shows PromptForge bundle version  
@@ -316,6 +363,12 @@ Each tool policy object:
 | `tier` | `efficiency` | Risk band |
 | `requires_approval` | `true` | Host must get human OK before execute |
 | `granted` | `true` | `false` → evaluate denies |
+| `category` | *(none)* | Optional approval group — acts sharing one are approved together |
+
+Each key under `tools` is the tool name your host sends to `evaluate()`, exactly as it sends
+it. The examples below use names in the shapes hosts really send: bare native names like
+`read_file`, and MCP names like `mcp__acme_crm__email_send_now`. See
+[Naming acts](#naming-acts--the-only-rule).
 
 On create, leave **Publish Act immediately** checked to go live, or uncheck to review the draft first. Talk stubs are always created; JSON does not replace SOUL/principles content.
 
@@ -329,12 +382,12 @@ On create, leave **Publish Act immediately** checked to go live, or uncheck to r
   "platform_source": "your_platform",
   "default_tier": "efficiency",
   "tools": {
-    "calendar.get_events": {
+    "read_file": {
       "tier": "velocity",
       "requires_approval": false,
       "granted": true
     },
-    "crm.update_contact": {
+    "mcp__acme_crm__contacts_update_contact": {
       "tier": "control",
       "requires_approval": true,
       "granted": true
@@ -343,90 +396,97 @@ On create, leave **Publish Act immediately** checked to go live, or uncheck to r
 }
 ```
 
-### Full example (Leo-shaped inventory — paste as-is to try import)
+### Full example (paste as-is to try import)
+
+A realistic mix: native host tools with bare names, MCP tools with server-prefixed names, two
+approval groups, and one act refused outright.
 
 ```json
 {
-  "agent_key": "leo",
-  "display_name": "Leo — Marketing AI",
-  "digital_worker_email": "leo@agents.example.com",
+  "agent_key": "marketing_assistant",
+  "display_name": "Marketing Assistant",
+  "digital_worker_email": "marketing@agents.example.com",
   "platform": "example_ops",
   "default_tier": "velocity",
   "tools": {
-    "calendar.get_events": {
+    "read_file": {
       "tier": "velocity",
       "requires_approval": false,
       "granted": true
     },
-    "calendar.create_event": {
+    "write_file": {
       "tier": "efficiency",
+      "requires_approval": true,
+      "granted": true,
+      "category": "files.write"
+    },
+    "search_files": {
+      "tier": "velocity",
+      "requires_approval": false,
+      "granted": true
+    },
+    "web_search": {
+      "tier": "velocity",
+      "requires_approval": false,
+      "granted": true
+    },
+    "terminal": {
+      "tier": "control",
       "requires_approval": true,
       "granted": true
     },
-    "calendar.update_event": {
+    "mcp__acme_crm__contacts_get_segments": {
+      "tier": "velocity",
+      "requires_approval": false,
+      "granted": true
+    },
+    "mcp__acme_crm__contacts_update_tags": {
       "tier": "efficiency",
       "requires_approval": true,
-      "granted": true
+      "granted": true,
+      "category": "contacts.write"
     },
-    "campaign.get_clarity_insights": {
-      "tier": "velocity",
-      "requires_approval": false,
-      "granted": true
-    },
-    "campaign.refresh_ad_data": {
-      "tier": "velocity",
-      "requires_approval": false,
-      "granted": true
-    },
-    "funnel.analytics_read": {
-      "tier": "velocity",
-      "requires_approval": false,
-      "granted": true
-    },
-    "funnel.create": {
-      "tier": "velocity",
-      "requires_approval": false,
-      "granted": true
-    },
-    "funnel.generate_page": {
-      "tier": "velocity",
-      "requires_approval": false,
-      "granted": true
-    },
-    "funnel.regenerate_step": {
-      "tier": "velocity",
-      "requires_approval": false,
-      "granted": true
-    },
-    "funnel.publish": {
+    "mcp__acme_crm__contacts_bulk_segment": {
       "tier": "efficiency",
       "requires_approval": true,
-      "granted": true
+      "granted": true,
+      "category": "contacts.write"
     },
-    "funnel.update_checkout_config": {
-      "tier": "efficiency",
-      "requires_approval": true,
-      "granted": true
-    }
-  },
-  "tool_categories": {
-    "calendar.read": {
+    "mcp__acme_crm__email_get_campaigns": {
       "tier": "velocity",
       "requires_approval": false,
       "granted": true
     },
-    "calendar.write": {
+    "mcp__acme_crm__email_test_send": {
       "tier": "efficiency",
       "requires_approval": true,
-      "granted": true
+      "granted": true,
+      "category": "email.send"
     },
-    "analytics.read": {
-      "tier": "velocity",
-      "requires_approval": false,
-      "granted": true
+    "mcp__acme_crm__email_send_now": {
+      "tier": "control",
+      "requires_approval": true,
+      "granted": true,
+      "category": "email.send"
+    },
+    "mcp__acme_crm__email_delete_campaign": {
+      "tier": "control",
+      "requires_approval": true,
+      "granted": false
     }
   }
 }
 ```
 
-> If `leo` already exists in your org, change `agent_key` (and email) before importing, or use **Blank** and edit Act manually on the existing profile.
+Reading it:
+
+- `mcp__acme_crm__…` is what an MCP host sends for a tool on a server it calls `acme_crm`.
+  Substitute your own server name; it is part of the name, not a convention.
+- `email.send` groups the test send and the live send, so a human is asked once for the pair.
+  `terminal` has no group, so it is approved on its own every time.
+- `email_delete_campaign` is listed with `granted: false`. Listing a refusal is better than
+  omitting the act: the refusal is explicit, visible in the policy, and reported as
+  `not_granted` rather than as an unknown tool.
+
+> If `marketing_assistant` already exists in your org, change `agent_key` (and email) before
+> importing, or use **Blank** and edit Act manually on the existing profile.

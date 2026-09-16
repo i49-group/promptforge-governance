@@ -41,6 +41,20 @@ export interface ToolPolicy {
   tier: GovernanceTier;
   requires_approval: boolean;
   granted: boolean;
+  /**
+   * Optional approval group this act belongs to, e.g. `email.write`.
+   *
+   * When an act needs approval, the host may apply the answer to the whole group rather
+   * than asking again for each act in a chain. The group is **declared here, never inferred
+   * from the tool's name.** That is deliberate: inferring it required tool names to look
+   * like `domain.action`, which imposed a naming convention nobody documented, silently
+   * failed for every real name a host sends, and could never work at all for names like
+   * `read_file` that have no domain.
+   *
+   * Free-form. Any acts sharing a string are approved together; omit it and each act is
+   * approved on its own.
+   */
+  category?: string;
 }
 
 export interface PolicyBundlePayload {
@@ -82,6 +96,11 @@ export interface EvaluateResult {
   bundle_version: string;
   correlation_id: string;
   pdp_state: PdpState;
+  /**
+   * The approval group this decision belongs to, or null when the act stands alone.
+   * Hosts that support group approval use this as the key their allowlist remembers.
+   */
+  category: string | null;
 }
 
 export interface PdpOptions {

@@ -265,6 +265,9 @@ Disabling the plugin removes Act enforcement — treat as an incident, not a con
 | Bundle 404 | No published policy | Publish Act on the profile |
 | Block ignored; tool still runs | Hermes build without block support | Upgrade Hermes; confirm hooks docs for `action: block` |
 | Wrong agent’s policy | Shared env across profiles | Per-gateway `PF_AGENT_KEY` |
+| Policy looks complete, yet calls deny as `unknown_tool` | **The act names do not match what Hermes sends.** Matching is literal, and a name that matches nothing is inert rather than rejected — so the policy reads as comprehensive while governing nothing | Compare the policy's act names against the gateway's own tool-registration log line. Native tools arrive bare (`read_file`, `terminal`); MCP tools arrive as `mcp__<server>__<domain>_<action>`. Fix the names in Act and republish |
+| An act was granted, but the agent still cannot use the capability | A granted act name that no tool will send governs nothing, and the *real* name is unlisted, so it denies as `unknown_tool` | Same fix. Any act with zero recorded decisions after real traffic is a candidate |
+| Approval asked once per act in a long chain | No `category` declared on those acts | Give the related acts the same `category` so one answer covers the group |
 
 ---
 

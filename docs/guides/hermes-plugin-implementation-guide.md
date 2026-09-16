@@ -137,7 +137,7 @@ For gateway services (`ai.hermes.gateway-<agent>`), put env in the service defin
 export PF_BASE_URL=https://www.mypromptforge.com
 export PF_SERVICE_TOKEN=pf_svc_…
 export PF_BUNDLE_VERIFY_KEY=…
-export PF_AGENT_KEY=penn
+export PF_AGENT_KEY=my-agent
 export PF_ENVIRONMENT=production
 ```
 
@@ -150,7 +150,7 @@ launchctl kickstart -k gui/$(id -u)/ai.hermes.gateway-<agent>
 
 ### 4.3 One agent_key per Hermes process
 
-Do **not** share one Hermes process across `penn` and `leo` with a single `PF_AGENT_KEY`. Each profile/gateway should match its PromptForge package.
+Do **not** share one Hermes process across two agents with a single `PF_AGENT_KEY`. Each profile/gateway should match its PromptForge package.
 
 ---
 
@@ -182,7 +182,7 @@ Start a session for that agent and check logs for:
 
 ```text
 Registered promptforge-governance hooks
-PromptForge governance ready agent=penn …
+PromptForge governance ready agent=my-agent …
 ```
 
 ### 5.3 Deny a tool (hard proof)

@@ -1,0 +1,24 @@
+[project]
+name = "promptforge-governance-hermes"
+version = "0.1.0"
+description = "PromptForge policy enforcement point for Hermes agent hosts"
+readme = "README.md"
+license = { file = "../LICENSE" }
+# 3.10 is the floor: the module uses PEP 604 unions at runtime in annotations that are
+# evaluated (`BaseException | str`), not only under `from __future__ import annotations`.
+requires-python = ">=3.10"
+# No third-party runtime dependencies, by design. The plugin uses only urllib, hmac,
+# hashlib, json and threading from the standard library, so it can be dropped onto a
+# host without introducing a dependency tree into a security-critical path.
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/i49-group/promptforge-governance"
+Issues = "https://github.com/i49-group/promptforge-governance/issues"
+
+[tool.pytest.ini_options]
+python_files = "test_*.py"
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"

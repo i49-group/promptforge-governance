@@ -29,7 +29,18 @@ export interface HermesGovernancePluginOptions {
 export interface ToolGateContext {
   toolName: string;
   correlationId?: string;
+  /**
+   * Reserved and currently ignored by the evaluator. Policy is decided on `toolName`
+   * alone — passing arguments here does NOT make the decision argument-aware, and
+   * `evaluateAgainstBundle` never reads this field. It is carried so that host
+   * integrations and approval callbacks can surface the call to a human, and so the
+   * shape does not have to change if argument-level policy is added later.
+   *
+   * See the threat model in the repository README before relying on tool-name policy
+   * to constrain a capability rather than a label.
+   */
   args?: Record<string, unknown>;
+  /** Reserved and currently ignored by the evaluator, as with `args`. */
   resourceHints?: Record<string, unknown>;
 }
 

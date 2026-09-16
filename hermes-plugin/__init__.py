@@ -232,12 +232,26 @@ def on_session_start(**kwargs: Any) -> None:
 
 def pre_tool_call(
     tool_name: str = "",
-    args: Optional[dict] = None,
+    args: Optional[dict] = None,  # noqa: ARG001 — accepted, deliberately not evaluated
     task_id: str = "",
     **kwargs: Any,
 ) -> Optional[dict]:
     """
     PEP gate. Returns Hermes block directive with clear user-facing next steps.
+
+    `args` is accepted to match the host's hook signature and is **deliberately not
+    used**: policy is evaluated on tool identity alone. Two consequences the caller
+    should know, both documented in the README threat model:
+
+      * The same tool called against one record and against fifty thousand is one
+        decision. Distinguish them by giving them different tool names, or not at all.
+      * A granted general-purpose tool — shell, code interpreter, HTTP client — can
+        reproduce most specifically-named tools, so denying a narrow act while granting
+        a broad one denies a label rather than a capability.
+
+    Do not add argument inspection here alone. The decision must stay identical across
+    every evaluator (see conformance/vectors.json), so the request shape, the reference
+    implementation, and the vectors have to change together.
     """
     agent = _agent_key_label()
     name = (tool_name or kwargs.get("name") or "").strip()

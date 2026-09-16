@@ -18,7 +18,7 @@ import { createGovernancePdp } from '@promptforge/governance-pdp';
 const pdp = createGovernancePdp({
   baseUrl: 'https://www.mypromptforge.com',
   token: process.env.PF_SERVICE_TOKEN!,
-  agentKey: 'penn',
+  agentKey: 'my-agent',
   environment: 'staging',
   verifyKey: process.env.PF_BUNDLE_VERIFY_KEY!, // same as GOVERNANCE_BUNDLE_SIGNING_KEY for HS256
   fetchTimeoutMs: 500,
@@ -27,7 +27,7 @@ const pdp = createGovernancePdp({
 await pdp.refresh(); // session start + periodic
 
 const decision = pdp.evaluate({
-  agent_key: 'penn',
+  agent_key: 'my-agent',
   tool_name: 'email.schedule_campaign',
   correlation_id: 'corr_…',
 });

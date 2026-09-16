@@ -1,8 +1,15 @@
-name: conformance
+name: ci
 
-# Proves the TypeScript and Python evaluators reach identical decisions.
-# Both run conformance/vectors.json. If they disagree, hosts are being governed
-# differently and this job fails.
+# Two jobs, deliberately separate.
+#
+# `evaluators-agree` proves the TypeScript and Python evaluators reach identical
+# decisions on conformance/vectors.json. If they disagree, hosts are being governed
+# differently, and that is the failure this repository exists to prevent.
+#
+# `build-and-test` runs everything else. It exists because the earlier version of this
+# workflow ran only the governance-pdp package: packages/plugin-hermes — the actual
+# enforcement layer — and both typecheck and build were never executed in CI at all,
+# while the workflow reported green. A gate that does not run is not a passing gate.
 
 on:
   push:
@@ -36,3 +43,47 @@ jobs:
 
       - name: Python Hermes evaluator
         run: python3 -m unittest discover -s hermes-plugin -p 'test_*.py' -v
+
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # -r, so a new package cannot be added and silently go untested.
+      - name: All workspace tests
+        run: pnpm test
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Build
+        run: pnpm build
+
+  python-floor:
+    # pyproject.toml declares requires-python >= 3.10. Prove the floor rather than
+    # trusting it: the plugin is dropped onto hosts we do not control, and the oldest
+    # supported interpreter is the one most likely to be there.
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.10', '3.13']
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Python plugin tests
+        run: python3 -m unittest discover -s hermes-plugin -p 'test_*.py'

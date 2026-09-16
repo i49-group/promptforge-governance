@@ -101,7 +101,7 @@ def block_setup(
             f"See: {INSTALL_URL}",
         ],
         "network": [
-            "Check that this host can reach PF_BASE_URL (default https://www.mypromptforge.com).",
+            "Check that this host can reach PF_BASE_URL (required, e.g. https://www.mypromptforge.com).",
             "Retry after network/VPN/Tailscale is up; tools stay blocked until refresh succeeds.",
         ],
         "setup": [

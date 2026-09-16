@@ -18,7 +18,14 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 from uuid import uuid4
 
-from derive import candidate_acts, derive_facets
+# Both forms are needed and neither is optional: hosts load this directory as a package
+# (relative import works) and as a flat path on sys.path (absolute works). A bare absolute
+# import here fails under package loading, and __init__'s own fallback then masks it as
+# "No module named 'pdp'" — the plugin does not load and the agent is silently ungoverned.
+try:
+    from .derive import candidate_acts, derive_facets
+except ImportError:  # loaded as flat plugin directory on sys.path
+    from derive import candidate_acts, derive_facets  # type: ignore
 
 
 class PdpError(Exception):

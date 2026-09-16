@@ -65,6 +65,7 @@ class DecisionReporter:
         self.sent = 0
         self.failed = 0
         self.rejected = 0
+        self._warn_counts: dict = {}
 
     def _ensure_worker(self) -> None:
         with self._lock:
@@ -104,15 +105,32 @@ class DecisionReporter:
             return True
         except queue.Full:
             self.dropped += 1
-            logger.debug(
-                "PromptForge decision report dropped, queue full (dropped=%d)",
+            self._warn_occasionally(
+                "dropped",
+                "PromptForge decision reports dropping, queue full (dropped=%d)",
                 self.dropped,
             )
             return False
         except Exception as exc:  # noqa: BLE001 — reporting never breaks the caller
             self.dropped += 1
-            logger.debug("PromptForge decision report not enqueued: %s", exc)
+            self._warn_occasionally(
+                "enqueue", "PromptForge decision report not enqueued: %s", exc
+            )
             return False
+
+    def _warn_occasionally(self, key: str, msg: str, *args: Any) -> None:
+        """Warn on the first failure of a kind, then every hundredth.
+
+        These paths logged at debug until 09-16-2026, and the gateway logs at info, so a
+        reporter that failed on every call produced a log identical to one that never had
+        anything to report. The whole point of this module is to make decisions visible, so
+        its own failure is the last thing that should be quiet. Rate-limited because a broken
+        endpoint fails once per tool call and a warning per call would bury everything else.
+        """
+        n = self._warn_counts.get(key, 0) + 1
+        self._warn_counts[key] = n
+        if n == 1 or n % 100 == 0:
+            logger.warning(msg + " [occurrence %d]", *args, n)
 
     def _run(self) -> None:
         while True:
@@ -121,7 +139,9 @@ class DecisionReporter:
                 self._post(payload)
             except Exception as exc:  # noqa: BLE001
                 self.failed += 1
-                logger.debug("PromptForge decision report failed: %s", exc)
+                self._warn_occasionally(
+                    "post", "PromptForge decision report failed: %s", exc
+                )
             finally:
                 self._queue.task_done()
 
@@ -155,7 +175,14 @@ class DecisionReporter:
             self.sent += 1
         else:
             self.rejected += 1
-            logger.debug("PromptForge accepted=false for %s", payload.get("tool_name"))
+            # accepted=false means the decision did not reach the record: either the agent has
+            # not opted in, or the write failed. Note that a sampled-away allow is still
+            # accepted=true, so this is never merely sampling.
+            self._warn_occasionally(
+                "rejected",
+                "PromptForge did not record a decision for %s (opt-in off, or write failed)",
+                payload.get("tool_name"),
+            )
 
     def drain(self, timeout_s: float = 2.0) -> bool:
         """Wait for the queue to empty. For tests and shutdown, not the hot path."""

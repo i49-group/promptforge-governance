@@ -264,10 +264,15 @@ class DecisionReporterTests(unittest.TestCase):
         body.__enter__ = lambda: body  # type: ignore[method-assign]
         body.__exit__ = lambda *a: None  # type: ignore[method-assign]
         with mock.patch.object(reporter_mod.urllib.request, "urlopen", return_value=body):
-            r.report(agent_key="a", tool_name="t", decision="deny")
-            self.assertTrue(r.drain())
+            # Asserted rather than allowed to print: this now warns, and the warning is the
+            # feature — a decision that never reached the record should be visible at the
+            # level operators actually read.
+            with self.assertLogs(reporter_mod.logger, level="WARNING") as logged:
+                r.report(agent_key="a", tool_name="t", decision="deny")
+                self.assertTrue(r.drain())
         self.assertEqual(r.rejected, 1)
         self.assertEqual(r.sent, 0)
+        self.assertIn("did not record a decision", "\n".join(logged.output))
 
     def test_the_environment_travels_with_every_report(self):
         r = self._reporter(environment="staging")

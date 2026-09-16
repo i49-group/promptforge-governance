@@ -9,6 +9,7 @@ export { createGovernancePdp } from './pdp';
 export { evaluateAgainstBundle, resolveToolPolicy } from './evaluate';
 export { derivePdpState } from './state-machine';
 export { canonicalJson } from './canonical';
+export { canonicalAct, isAmbiguousMcpName, resolutionCandidates } from './actname';
 export { signPayloadHs256, verifyPayloadHs256 } from './verify';
 
 export type {

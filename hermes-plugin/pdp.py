@@ -23,8 +23,10 @@ from uuid import uuid4
 # import here fails under package loading, and __init__'s own fallback then masks it as
 # "No module named 'pdp'" — the plugin does not load and the agent is silently ungoverned.
 try:
+    from .actname import resolution_candidates
     from .derive import candidate_acts, derive_facets
 except ImportError:  # loaded as flat plugin directory on sys.path
+    from actname import resolution_candidates  # type: ignore
     from derive import candidate_acts, derive_facets  # type: ignore
 
 
@@ -183,6 +185,13 @@ def evaluate_derived(
       * If the policy lists NO derived act, fall back to the base act. This is what lets
         derivation ship to a fleet without denying a call: a policy tightens only when it
         opts in by naming a derived act.
+      * "Lists" means **named explicitly in `tools`** — deliberately not resolvable via a
+        category. A category like `terminal.write` would otherwise catch every derived
+        facet under that domain and silently opt a policy into narrowing nobody wrote,
+        making the tightening implicit and surprising in both directions. Derived facets
+        are an opt-in tightening; they are claimed by name or not at all. Revisit only
+        together with the category mechanism, which is inert today (see the README note on
+        category grain).
       * Record why narrowing did or did not apply, always. `derived_act:<name>` when it
         did; `args_unavailable`, `unclassified`, or `derived_unlisted` when it did not.
         Silent non-narrowing would be indistinguishable from having nothing to narrow,
@@ -269,8 +278,12 @@ def report_decisions_enabled(payload: dict) -> bool:
 
 def resolve_tool_policy(payload: dict, tool_name: str) -> Optional[dict]:
     tools = payload.get("tools") or {}
-    if tool_name in tools:
-        return tools[tool_name]
+    # Exact first, then the canonical dotted form. Order matters for safety, not style: an
+    # act that resolves today resolves to the same entry after this change, so
+    # canonicalization can only reach entries that were previously unreachable.
+    for candidate in resolution_candidates(tool_name):
+        if candidate in tools:
+            return tools[candidate]
 
     # Split on every dot and take the second segment, matching
     # `const [domain, action] = toolName.split('.')` in evaluate.ts. Splitting

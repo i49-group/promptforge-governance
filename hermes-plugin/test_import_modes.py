@@ -32,7 +32,7 @@ import textwrap
 import unittest
 
 HERE = pathlib.Path(__file__).resolve().parent
-_SIBLINGS = ("pdp", "derive", "messages", "reporter")
+_SIBLINGS = ("pdp", "derive", "actname", "messages", "reporter")
 
 
 class PackageMode(unittest.TestCase):

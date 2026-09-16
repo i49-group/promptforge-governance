@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto';
+import { resolutionCandidates } from './actname';
 import type {
   EvaluateRequest,
   EvaluateResult,
@@ -23,8 +24,13 @@ export function resolveToolPolicy(
   payload: PolicyBundlePayload,
   toolName: string
 ): ToolPolicy | null {
-  if (payload.tools[toolName]) {
-    return payload.tools[toolName];
+  // Exact first, then the canonical dotted form. Order matters for safety, not style: an
+  // act that resolves today resolves to the same entry after this change, so
+  // canonicalization can only reach entries that were previously unreachable.
+  for (const candidate of resolutionCandidates(toolName)) {
+    if (payload.tools[candidate]) {
+      return payload.tools[candidate];
+    }
   }
 
   const [domain, action] = toolName.split('.');

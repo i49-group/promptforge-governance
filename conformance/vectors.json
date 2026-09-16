@@ -18,17 +18,53 @@
       "grace_ms": 3600000,
       "default_tier": "velocity",
       "tools": {
-        "email.send_now": { "granted": true, "tier": "efficiency", "requires_approval": true },
-        "email.list_campaigns": { "granted": true, "tier": "velocity", "requires_approval": false },
-        "contacts.delete": { "granted": false, "tier": "control", "requires_approval": true },
-        "reports.generate": { "granted": true, "tier": "control", "requires_approval": false },
-        "hermes_native_act": { "granted": true, "tier": "velocity", "requires_approval": false },
-        "deep.nested.act": { "granted": true, "tier": "velocity", "requires_approval": false }
+        "email.send_now": {
+          "granted": true,
+          "tier": "efficiency",
+          "requires_approval": true
+        },
+        "email.list_campaigns": {
+          "granted": true,
+          "tier": "velocity",
+          "requires_approval": false
+        },
+        "contacts.delete": {
+          "granted": false,
+          "tier": "control",
+          "requires_approval": true
+        },
+        "reports.generate": {
+          "granted": true,
+          "tier": "control",
+          "requires_approval": false
+        },
+        "hermes_native_act": {
+          "granted": true,
+          "tier": "velocity",
+          "requires_approval": false
+        },
+        "deep.nested.act": {
+          "granted": true,
+          "tier": "velocity",
+          "requires_approval": false
+        }
       },
       "tool_categories": {
-        "analytics.read": { "granted": true, "tier": "velocity", "requires_approval": false },
-        "analytics.write": { "granted": true, "tier": "efficiency", "requires_approval": true },
-        "vault.read": { "granted": false, "tier": "control", "requires_approval": true }
+        "analytics.read": {
+          "granted": true,
+          "tier": "velocity",
+          "requires_approval": false
+        },
+        "analytics.write": {
+          "granted": true,
+          "tier": "efficiency",
+          "requires_approval": true
+        },
+        "vault.read": {
+          "granted": false,
+          "tier": "control",
+          "requires_approval": true
+        }
       }
     },
     "default_control": {
@@ -43,7 +79,11 @@
       "grace_ms": 3600000,
       "default_tier": "control",
       "tools": {
-        "notes.append": { "granted": true, "tier": "velocity", "requires_approval": false }
+        "notes.append": {
+          "granted": true,
+          "tier": "velocity",
+          "requires_approval": false
+        }
       }
     },
     "no_categories": {
@@ -58,8 +98,37 @@
       "grace_ms": 3600000,
       "default_tier": "efficiency",
       "tools": {
-        "email.send_now": { "granted": true, "tier": "efficiency", "requires_approval": false }
+        "email.send_now": {
+          "granted": true,
+          "tier": "efficiency",
+          "requires_approval": false
+        }
       }
+    },
+    "prefixed_exact": {
+      "org_id": "00000000-0000-0000-0000-0000000000cf",
+      "agent_key": "conformance",
+      "environment": "staging",
+      "issued_at": "2026-09-15T00:00:00.000Z",
+      "not_before": "2026-09-15T00:00:00.000Z",
+      "expires_at": "2026-09-15T06:00:00.000Z",
+      "grace_ms": 3600000,
+      "version": "conformance-prefixed",
+      "etag": "conformance-prefixed",
+      "default_tier": "velocity",
+      "tools": {
+        "mcp__example_server__email_send_now": {
+          "granted": true,
+          "tier": "velocity",
+          "requires_approval": false
+        },
+        "email.send_now": {
+          "granted": false,
+          "tier": "control",
+          "requires_approval": true
+        }
+      },
+      "tool_categories": {}
     }
   },
   "cases": [
@@ -73,7 +142,9 @@
         "decision": "allow",
         "tier": "velocity",
         "requires_approval": false,
-        "reasons": ["tier:velocity"]
+        "reasons": [
+          "tier:velocity"
+        ]
       }
     },
     {
@@ -86,7 +157,10 @@
         "decision": "require_approval",
         "tier": "efficiency",
         "requires_approval": true,
-        "reasons": ["tier:efficiency", "requires_approval"]
+        "reasons": [
+          "tier:efficiency",
+          "requires_approval"
+        ]
       }
     },
     {
@@ -99,7 +173,10 @@
         "decision": "require_approval",
         "tier": "control",
         "requires_approval": true,
-        "reasons": ["tier:control", "requires_approval"]
+        "reasons": [
+          "tier:control",
+          "requires_approval"
+        ]
       }
     },
     {
@@ -112,7 +189,10 @@
         "decision": "require_approval",
         "tier": "control",
         "requires_approval": true,
-        "reasons": ["tier:control", "requires_approval"]
+        "reasons": [
+          "tier:control",
+          "requires_approval"
+        ]
       }
     },
     {
@@ -125,7 +205,10 @@
         "decision": "deny",
         "tier": "control",
         "requires_approval": true,
-        "reasons": ["not_granted", "tool:contacts.delete"]
+        "reasons": [
+          "not_granted",
+          "tool:contacts.delete"
+        ]
       }
     },
     {
@@ -138,7 +221,10 @@
         "decision": "deny",
         "tier": "control",
         "requires_approval": true,
-        "reasons": ["unknown_tool", "tool:billing.refund"]
+        "reasons": [
+          "unknown_tool",
+          "tool:billing.refund"
+        ]
       }
     },
     {
@@ -151,7 +237,9 @@
         "decision": "allow",
         "tier": "velocity",
         "requires_approval": false,
-        "reasons": ["tier:velocity"]
+        "reasons": [
+          "tier:velocity"
+        ]
       }
     },
     {
@@ -164,7 +252,9 @@
         "decision": "allow",
         "tier": "velocity",
         "requires_approval": false,
-        "reasons": ["tier:velocity"]
+        "reasons": [
+          "tier:velocity"
+        ]
       }
     },
     {
@@ -177,7 +267,9 @@
         "decision": "allow",
         "tier": "velocity",
         "requires_approval": false,
-        "reasons": ["tier:velocity"]
+        "reasons": [
+          "tier:velocity"
+        ]
       }
     },
     {
@@ -190,7 +282,10 @@
         "decision": "require_approval",
         "tier": "efficiency",
         "requires_approval": true,
-        "reasons": ["tier:efficiency", "requires_approval"]
+        "reasons": [
+          "tier:efficiency",
+          "requires_approval"
+        ]
       }
     },
     {
@@ -203,7 +298,10 @@
         "decision": "require_approval",
         "tier": "efficiency",
         "requires_approval": true,
-        "reasons": ["tier:efficiency", "requires_approval"]
+        "reasons": [
+          "tier:efficiency",
+          "requires_approval"
+        ]
       }
     },
     {
@@ -216,7 +314,10 @@
         "decision": "deny",
         "tier": "control",
         "requires_approval": true,
-        "reasons": ["not_granted", "tool:vault.get_secret"]
+        "reasons": [
+          "not_granted",
+          "tool:vault.get_secret"
+        ]
       }
     },
     {
@@ -229,7 +330,9 @@
         "decision": "allow",
         "tier": "velocity",
         "requires_approval": false,
-        "reasons": ["tier:velocity"]
+        "reasons": [
+          "tier:velocity"
+        ]
       }
     },
     {
@@ -242,7 +345,10 @@
         "decision": "deny",
         "tier": "control",
         "requires_approval": true,
-        "reasons": ["unknown_tool", "tool:undeclared_native_act"]
+        "reasons": [
+          "unknown_tool",
+          "tool:undeclared_native_act"
+        ]
       }
     },
     {
@@ -255,7 +361,10 @@
         "decision": "deny",
         "tier": "control",
         "requires_approval": true,
-        "reasons": ["unknown_tool", "tool:malformed."]
+        "reasons": [
+          "unknown_tool",
+          "tool:malformed."
+        ]
       }
     },
     {
@@ -268,12 +377,14 @@
         "decision": "allow",
         "tier": "velocity",
         "requires_approval": false,
-        "reasons": ["tier:velocity"]
+        "reasons": [
+          "tier:velocity"
+        ]
       }
     },
     {
       "id": "multi-segment-fallback-uses-second-segment-only",
-      "why": "Pins the reference split. For a.b.c the action is the SECOND segment, so analytics.get_daily.v2 classifies on 'get_daily' and reads. Note this case alone does not separate the two split strategies, because a remainder of 'get_daily.v2' also starts with get_ — the next case is the one that does.",
+      "why": "Pins the reference split. For a.b.c the action is the SECOND segment, so analytics.get_daily.v2 classifies on 'get_daily' and reads. Note this case alone does not separate the two split strategies, because a remainder of 'get_daily.v2' also starts with get_ \u2014 the next case is the one that does.",
       "bundle": "standard",
       "pdp_state": "normal",
       "tool_name": "analytics.get_daily.v2",
@@ -281,12 +392,14 @@
         "decision": "allow",
         "tier": "velocity",
         "requires_approval": false,
-        "reasons": ["tier:velocity"]
+        "reasons": [
+          "tier:velocity"
+        ]
       }
     },
     {
       "id": "multi-segment-fallback-separates-the-two-splits",
-      "why": "The only shape where splitting on every dot and splitting once actually differ. The prefix rules cannot separate them, because a remainder always begins with the second segment — so a remainder starts with get_ exactly when the second segment does. The separator is the one rule that matches EXACTLY rather than by prefix: 'search'. The reference sees second segment 'search' and reads; an implementation keeping the remainder sees 'search.daily', which is not equal to 'search', and writes — gating an act the reference allows. Production has zero multi-segment act names, so this pins intent rather than guarding live traffic.",
+      "why": "The only shape where splitting on every dot and splitting once actually differ. The prefix rules cannot separate them, because a remainder always begins with the second segment \u2014 so a remainder starts with get_ exactly when the second segment does. The separator is the one rule that matches EXACTLY rather than by prefix: 'search'. The reference sees second segment 'search' and reads; an implementation keeping the remainder sees 'search.daily', which is not equal to 'search', and writes \u2014 gating an act the reference allows. Production has zero multi-segment act names, so this pins intent rather than guarding live traffic.",
       "bundle": "standard",
       "pdp_state": "normal",
       "tool_name": "analytics.search.daily",
@@ -294,7 +407,9 @@
         "decision": "allow",
         "tier": "velocity",
         "requires_approval": false,
-        "reasons": ["tier:velocity"]
+        "reasons": [
+          "tier:velocity"
+        ]
       }
     },
     {
@@ -307,7 +422,10 @@
         "decision": "deny",
         "tier": "control",
         "requires_approval": true,
-        "reasons": ["unknown_tool", "tool:email.get_campaigns"]
+        "reasons": [
+          "unknown_tool",
+          "tool:email.get_campaigns"
+        ]
       }
     },
     {
@@ -320,7 +438,9 @@
         "decision": "deny",
         "tier": "control",
         "requires_approval": true,
-        "reasons": ["pdp_fail_closed"]
+        "reasons": [
+          "pdp_fail_closed"
+        ]
       }
     },
     {
@@ -333,7 +453,10 @@
         "decision": "allow",
         "tier": "velocity",
         "requires_approval": false,
-        "reasons": ["tier:velocity", "grace_period"]
+        "reasons": [
+          "tier:velocity",
+          "grace_period"
+        ]
       }
     },
     {
@@ -346,7 +469,10 @@
         "decision": "allow",
         "tier": "velocity",
         "requires_approval": false,
-        "reasons": ["tier:velocity", "using_cached_bundle"]
+        "reasons": [
+          "tier:velocity",
+          "using_cached_bundle"
+        ]
       }
     },
     {
@@ -359,7 +485,11 @@
         "decision": "require_approval",
         "tier": "efficiency",
         "requires_approval": true,
-        "reasons": ["tier:efficiency", "grace_period", "requires_approval"]
+        "reasons": [
+          "tier:efficiency",
+          "grace_period",
+          "requires_approval"
+        ]
       }
     },
     {
@@ -372,7 +502,134 @@
         "decision": "deny",
         "tier": "control",
         "requires_approval": true,
-        "reasons": ["unknown_tool", "tool:billing.refund"]
+        "reasons": [
+          "unknown_tool",
+          "tool:billing.refund"
+        ]
+      }
+    },
+    {
+      "id": "canonical-prefixed-resolves-to-dotted-entry",
+      "why": "Hosts emit mcp__<server>__<domain>_<action>; policies are written dotted. Before canonicalization this denied as unknown_tool, which made every dotted entry in every policy unreachable.",
+      "bundle": "standard",
+      "pdp_state": "normal",
+      "tool_name": "mcp__example_server__email_list_campaigns",
+      "expect": {
+        "decision": "allow",
+        "tier": "velocity",
+        "requires_approval": false,
+        "reasons": [
+          "tier:velocity"
+        ]
+      }
+    },
+    {
+      "id": "canonical-exact-match-wins-over-dotted",
+      "why": "The safety property the whole change rests on. Both spellings are present and disagree; the emitted spelling must win, so no act that already resolved can change answer.",
+      "bundle": "prefixed_exact",
+      "pdp_state": "normal",
+      "tool_name": "mcp__example_server__email_send_now",
+      "expect": {
+        "decision": "allow",
+        "tier": "velocity",
+        "requires_approval": false,
+        "reasons": [
+          "tier:velocity"
+        ]
+      }
+    },
+    {
+      "id": "canonical-server-name-is-not-part-of-identity",
+      "why": "A policy must not break because a host renamed an MCP server. The flip side is a real limitation: two servers exposing the same domain_action pair share one entry.",
+      "bundle": "standard",
+      "pdp_state": "normal",
+      "tool_name": "mcp__another_server__email_list_campaigns",
+      "expect": {
+        "decision": "allow",
+        "tier": "velocity",
+        "requires_approval": false,
+        "reasons": [
+          "tier:velocity"
+        ]
+      }
+    },
+    {
+      "id": "canonical-preserves-not-granted",
+      "why": "Canonicalization reaches entries, it does not soften them. A denied dotted entry stays denied when reached by the prefixed spelling.",
+      "bundle": "standard",
+      "pdp_state": "normal",
+      "tool_name": "mcp__example_server__contacts_delete",
+      "expect": {
+        "decision": "deny",
+        "tier": "control",
+        "requires_approval": true,
+        "reasons": [
+          "not_granted",
+          "tool:mcp__example_server__contacts_delete"
+        ]
+      }
+    },
+    {
+      "id": "canonical-single-underscore-spelling-is-not-guessed",
+      "why": "mcp_a_b_c cannot be split into server and domain without guessing, and a wrong guess maps an act onto a policy entry that may grant something else. It must keep denying, loudly.",
+      "bundle": "standard",
+      "pdp_state": "normal",
+      "tool_name": "mcp_example_server_email_send_now",
+      "expect": {
+        "decision": "deny",
+        "tier": "control",
+        "requires_approval": true,
+        "reasons": [
+          "unknown_tool",
+          "tool:mcp_example_server_email_send_now"
+        ]
+      }
+    },
+    {
+      "id": "canonical-native-act-is-untouched",
+      "why": "Native acts have no domain/action shape and need no canonicalization; the path must not disturb them.",
+      "bundle": "standard",
+      "pdp_state": "normal",
+      "tool_name": "hermes_native_act",
+      "expect": {
+        "decision": "allow",
+        "tier": "velocity",
+        "requires_approval": false,
+        "reasons": [
+          "tier:velocity"
+        ]
+      }
+    },
+    {
+      "id": "canonical-unknown-prefixed-act-still-denies",
+      "why": "Canonicalization must not become a wildcard: a prefixed act whose dotted form is not in the policy still denies as unknown.",
+      "bundle": "no_categories",
+      "pdp_state": "normal",
+      "tool_name": "mcp__example_server__vault_read_secret",
+      "expect": {
+        "decision": "deny",
+        "tier": "control",
+        "requires_approval": true,
+        "reasons": [
+          "unknown_tool",
+          "tool:mcp__example_server__vault_read_secret"
+        ]
+      }
+    },
+    {
+      "id": "canonical-preserves-approval-flag",
+      "why": "Reaching an entry by the canonical form must carry its approval flag through. email.send_now is granted but flagged, so the prefixed spelling must escalate rather than allow.",
+      "bundle": "standard",
+      "pdp_state": "normal",
+      "tool_name": "mcp__example_server__email_send_now",
+      "expect": {
+        "decision": "require_approval",
+        "tier": "efficiency",
+        "requires_approval": true,
+        "reasons": [
+          "tier:efficiency",
+          "requires_approval"
+        ]
       }
     }
   ]

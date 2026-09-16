@@ -1,9 +1,9 @@
 """
 Fire-and-forget reporting of local PDP decisions back to PromptForge.
 
-`POST /api/governance/decisions` has existed since Plan A and nothing ever called
-it, so `governance_decisions` held zero rows and we could not tell "no denials
-happened" from "the emitter never fires". This is the missing emitter.
+The receiving endpoint `POST /api/governance/decisions` existed before this module
+did, with no caller — so no decision was ever recorded, and we could not tell "no
+denials happened" from "the emitter never fires". This is the emitter.
 
 Two constraints shape the design:
 

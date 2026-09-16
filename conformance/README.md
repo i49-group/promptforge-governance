@@ -13,14 +13,14 @@ reference and the Python Hermes plugin.
 ## Why this exists
 
 The same decision logic is implemented several times: this repo's TypeScript
-package, this repo's Python plugin, PromptForge's in-app copy, and Example
-Central's. Until 09-15-2026 nothing proved they agreed, and they didn't.
+package, this repo's Python plugin, PromptForge's in-app copy, and third-party
+ops backends. Nothing previously proved they agreed — and they did not.
 
 Both Python copies omitted one rule — **an act at the `control` tier requires
 approval even when its `requires_approval` flag is false**. So an act that
-PromptForge and your ops platform gated, Hermes allowed outright. Four smaller
-disagreements sat alongside it: reason ordering, a missing `grace_period` /
-`using_cached_bundle` disclosure on allow, `granted` reported instead of the
+PromptForge and the TypeScript reference gated, Hermes allowed outright. Four
+smaller disagreements sat alongside it: reason ordering, a missing `grace_period`
+/ `using_cached_bundle` disclosure on allow, `granted` reported instead of the
 resolved tier, and a different split for multi-segment act names.
 
 None of it had ever changed a live decision, because no act had ever been
@@ -65,8 +65,8 @@ is generated per call and is deliberately not asserted.
 Exact match; category fallback for both reads and writes; the read classifier
 (`get_` and `list_` prefixes, and `search` matched exactly rather than by prefix);
 category denial; `control` gating with and without the flag; `default_tier`
-escalation; unknown acts; ungranted acts; domain-less act names (159 of the 278
-live acts have no domain); malformed names with a trailing dot; multi-segment
+escalation; unknown acts; ungranted acts; domain-less act names (many real-world
+act names have no domain); malformed names with a trailing dot; multi-segment
 names; a missing `tool_categories` object; and the `fail_closed`, `grace` and
 `cached` states including reason ordering when several reasons apply.
 

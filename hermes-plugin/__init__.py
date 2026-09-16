@@ -25,7 +25,6 @@ from __future__ import annotations
 import logging
 import os
 import threading
-import time
 from collections import OrderedDict
 from typing import Any, Optional
 
@@ -373,7 +372,7 @@ def post_tool_call(
     Hermes owns the approval prompt and does not hand us its verdict, but it only
     reaches the tool if the answer was yes — so an escalated act arriving here is an
     approval that was granted and used. This is also why reporting an approval
-    happens after the act rather than before it (Glen, 09-15-2026).
+    happens after the act rather than before it.
 
     An escalation that never arrives here was declined or timed out, and shows up as
     a require_approval row with no following run. We cannot yet tell those two apart;
@@ -468,6 +467,3 @@ def register(ctx: Any) -> None:
         "Registered promptforge-governance hooks (agent_key=%s)",
         os.environ.get("PF_AGENT_KEY", "?"),
     )
-
-
-_ = time

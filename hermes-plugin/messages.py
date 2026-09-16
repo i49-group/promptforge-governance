@@ -27,7 +27,7 @@ def _bullet(steps: Sequence[str]) -> str:
 
 def classify_setup_error(exc: BaseException | str) -> str:
     text = str(exc).lower()
-    if "missing required env var" in text or "pf_" in text and "missing" in text:
+    if "missing required env var" in text or ("pf_" in text and "missing" in text):
         return "missing_env"
     if "401" in text or "unauthorized" in text or "403" in text or "forbidden" in text:
         return "auth"
@@ -101,7 +101,7 @@ def block_setup(
             f"See: {INSTALL_URL}",
         ],
         "network": [
-            f"Check that this host can reach PF_BASE_URL (default https://www.mypromptforge.com).",
+            "Check that this host can reach PF_BASE_URL (default https://www.mypromptforge.com).",
             "Retry after network/VPN/Tailscale is up; tools stay blocked until refresh succeeds.",
         ],
         "setup": [
@@ -112,7 +112,7 @@ def block_setup(
     }
 
     return (
-        f"🚫 TOOL BLOCKED BY PROMPTFORGE\n"
+        "🚫 TOOL BLOCKED BY PROMPTFORGE\n"
         f"Tool: `{tool_name}`\n"
         f"Agent: `{agent_key}`\n\n"
         f"{headers[kind]}\n\n"
@@ -138,7 +138,7 @@ def block_policy(
     ):
         title = "This tool requires human approval under PromptForge Act policy."
         steps = [
-            "Have an operator approve the action in your ops host (e.g. your ops platform approval card), or",
+            "Have an operator approve the action in your ops host (e.g. your ops platform's approval card), or",
             f"In PromptForge ({ADMIN_URL}) open agent `{agent_key}` → Act policy → set requires_approval=false for `{tool_name}` if that is intentional → Publish.",
             "Then retry the request (hosts refresh bundles on a schedule; wait up to a few minutes or restart Hermes).",
         ]
@@ -178,14 +178,14 @@ def block_policy(
         ]
 
     return (
-        f"🚫 TOOL BLOCKED BY PROMPTFORGE\n"
+        "🚫 TOOL BLOCKED BY PROMPTFORGE\n"
         f"Tool: `{tool_name}`\n"
         f"Agent: `{agent_key}`\n"
         f"Decision: {decision} · Bundle: {bundle_version} · PDP state: {pdp_state}\n\n"
         f"{title}\n\n"
         f"What to do:\n{_bullet(steps)}\n\n"
         f"Reasons: {joined}\n"
-        f"Tell the user clearly that PromptForge blocked this tool and summarize the steps above."
+        "Tell the user clearly that PromptForge blocked this tool and summarize the steps above."
     )
 
 

@@ -124,7 +124,7 @@ def evaluate_against_bundle(
     tier = _max_tier(payload.get("default_tier"), tool_policy.get("tier"))
     # The control tier gates on its own, independent of the per-act flag. Omitting
     # this is what let Hermes allow control-tier acts outright while PromptForge
-    # and your ops platform gated them (see the 09-15-2026 governance review).
+    # and the TypeScript reference evaluator gated them.
     requires_approval = bool(tool_policy.get("requires_approval")) or tier == "control"
 
     reasons = [f"tier:{tier}"]
@@ -169,9 +169,9 @@ def inline_approval_enabled(payload: dict) -> bool:
 
     Defaults to False, deliberately. Hermes records no approver identity and has no
     role concept, so its gate asks whoever is present — enabling this globally would
-    silently reduce "only a named admin may approve" (Glen, 09-15-2026) to "anyone
-    in the channel". Eligibility is therefore opt-in per agent, published by
-    PromptForge, and only for agents whose channel is already admin-only.
+    silently reduce "only a named admin may approve" to "anyone in the channel".
+    Eligibility is therefore opt-in per agent, published by PromptForge, and only
+    for agents whose channel is already admin-only.
     """
     return bool(payload.get("inline_approval") is True)
 

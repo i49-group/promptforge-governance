@@ -21,7 +21,7 @@ const gov = createHermesGovernancePlugin({
   baseUrl: process.env.PF_BASE_URL!,
   token: process.env.PF_SERVICE_TOKEN!,
   verifyKey: process.env.PF_BUNDLE_VERIFY_KEY!,
-  agentKey: process.env.PF_AGENT_KEY || 'penn',
+  agentKey: process.env.PF_AGENT_KEY || 'my-agent',
   environment: 'production',
   onRequireApproval: async ({ toolName }) => {
     // Your Hermes / human approval UX

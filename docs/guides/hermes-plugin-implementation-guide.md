@@ -61,7 +61,7 @@ See [AI Governance Configuration Guide](./ai-governance-configuration-guide.md).
 | `PF_AGENT_KEY` | Must match the Hermes profile’s agent (e.g. `penn`) |
 | `PF_ENVIRONMENT` | Optional; default `production` |
 | `PF_INJECT_TALK` | Optional; default `true` — set `false` to skip Talk injection |
-| `PF_REFRESH_SECONDS` | Optional; default `600` — set `0` to disable background refresh |
+| `PF_REFRESH_SECONDS` | Optional; default `300` — set `0` to disable background refresh |
 
 Never commit these values. Prefer Hermes `requires_env` prompts, launchd/plist env, or a root-owned env file.
 
@@ -73,7 +73,7 @@ Hermes installs plugins from Git into `~/.hermes/plugins/` and loads them only w
 
 This monorepo keeps the Hermes plugin under `hermes-plugin/` (not the repo root), so use one of the methods below.
 
-### Method A — Local path install (recommended for a self-hosted host)
+### Method A — Local path install (recommended for a self-hosted macOS or Linux host)
 
 ```bash
 # On the Hermes host
@@ -103,7 +103,7 @@ hermes plugins install /tmp/promptforge-governance/hermes-plugin --enable
 
 ### Method C — Per-profile plugin (fleet)
 
-If each agent profile (`~/.hermes/profiles/penn`, `leo`, …) has its own config:
+If each agent profile (`~/.hermes/profiles/<agent>`) has its own config:
 
 1. Install the plugin once under `~/.hermes/plugins/promptforge-governance`  
 2. Enable it in **each** profile’s `config.yaml` that should be governed  
@@ -131,7 +131,7 @@ hermes plugins list
 
 ### 4.2 Launchd / gateway (production)
 
-For gateway services (`ai.hermes.gateway-penn`, etc.), put env in the service definition or a file the process sources **before** start:
+For gateway services (`ai.hermes.gateway-<agent>`), put env in the service definition or a file the process sources **before** start:
 
 ```bash
 export PF_BASE_URL=https://www.mypromptforge.com
@@ -145,7 +145,7 @@ Restart the gateway after changes:
 
 ```bash
 # example — adjust to your launchd labels
-launchctl kickstart -k gui/$(id -u)/ai.hermes.gateway-penn
+launchctl kickstart -k gui/$(id -u)/ai.hermes.gateway-<agent>
 ```
 
 ### 4.3 One agent_key per Hermes process
@@ -212,7 +212,7 @@ Admin → AI Governance → profile → **Activity** should show pack/bundle pul
 |--------------|------------------------|
 | `allow` | Hook returns `None` → tool executes |
 | `deny` | `{"action":"block","message":"PromptForge denied …"}` |
-| `require_approval` | **Block** with message (no PF approval card in Hermes yet). Use BC approval for BC MCP tools, or set `requires_approval: false` after human process. |
+| `require_approval` | **Block** with message (no PF approval card in Hermes yet). Use your ops platform's approval for its own MCP tools, or set `requires_approval: false` after human process. |
 | No bundle / past grace | **Block** (fail-closed) |
 
 ---
@@ -235,7 +235,7 @@ Before calling the fleet “governed”:
 - [ ] `PF_AGENT_KEY` matches PromptForge package for that profile  
 - [ ] MCP tools, terminal/shell, and local skills all go through Hermes tool dispatch (same `pre_tool_call`)  
 - [ ] Denied tool does not execute (verified in §5.3)  
-- [ ] BC Path 2 MCP still has its **own** PEP if tools execute in BC (defense in depth)  
+- [ ] Your ops platform's MCP may have its **own** PEP if tools execute there (defense in depth)  
 - [ ] Hermes version supports `pre_tool_call` **block** returns  
 
 ---

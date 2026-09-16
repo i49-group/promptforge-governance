@@ -5,7 +5,7 @@
 > **PromptForge governs · your runtime acts · your ops platform executes.**
 
 This repository is **not** the PromptForge product (PMP UI, org database, signing).  
-It is what you install on **Hermes**, **OpenClaw**, your ops platform, or custom hosts so tool calls cannot bypass policy.
+It is what you install on **Hermes**, **OpenClaw**, or custom hosts so tool calls cannot bypass policy.
 
 | Package | Role |
 |---------|------|

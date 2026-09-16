@@ -83,7 +83,7 @@ Talk stubs are always created on create. JSON import preconfigures **Act** (and 
 | **agent_key** | Lowercase ID matching your platform (`leo`, not `Leo`). Cannot change later without a new profile. |
 | **Display name** | Human label in the admin UI. (Also accepted from JSON on import.) |
 | **Digital worker email** | Optional identity email (e.g. `leo@agents.yourcompany.com`) carried on the pack. |
-| **Target platform** | Operator note only (e.g. `example_ops`) — stored for your team. |
+| **Target platform** | Operator note only (e.g. `acme_ops`) — stored for your team. |
 
 ### How to seed
 
@@ -187,7 +187,7 @@ PromptForge (PMP)
 | Host type | Preferred pull | Hot-path decide |
 |-----------|----------------|-----------------|
 | Agent harness (Hermes, Cursor, Claude) | MCP / REST pack+bundle | **PEP plugin** + local PDP on cached bundle |
-| Platform backend (e.g. BC) | REST | Same `@promptforge/governance-pdp` before execute |
+| Platform backend (e.g. your ops API) | REST | Same `@promptforge/governance-pdp` before execute |
 
 Base URL (production): `https://www.mypromptforge.com`
 

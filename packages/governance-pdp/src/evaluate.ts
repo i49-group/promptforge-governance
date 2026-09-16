@@ -40,7 +40,7 @@ export function resolveToolPolicy(
 
 /**
  * Evaluate a tool request against a verified policy bundle payload.
- * Most-restrictive-wins tier resolution (aligned with BC promptforge-governance).
+ * Most-restrictive-wins tier resolution.
  */
 export function evaluateAgainstBundle(
   bundle: SignedPolicyBundle,

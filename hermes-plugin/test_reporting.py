@@ -1,15 +1,13 @@
 """Tests for reporting local PDP decisions back to PromptForge.
 
-The defect this closes: `POST /api/governance/decisions` shipped in Plan A and no
-client ever called it, so `governance_decisions` held zero rows and "no denials
-happened" was indistinguishable from "the emitter never fires". A receiver with no
-sender is a dead control.
+The defect this closes: the `POST /api/governance/decisions` endpoint previously had
+no caller, so `governance_decisions` held zero rows and "no denials happened" was
+indistinguishable from "the emitter never fires". A receiver with no sender is a
+dead control.
 
 Two invariants are load-bearing and tested here rather than assumed:
   - reporting is silent unless the agent's policy opted in
   - reporting can never delay, fail or alter a tool call
-
-See docs/prds/agent-unblocking-initiative.md in the PromptForge repo.
 """
 
 from __future__ import annotations

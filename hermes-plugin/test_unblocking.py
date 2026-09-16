@@ -1,8 +1,5 @@
 """Tests for the unblocking slice: conditional revalidation, renewal safety, and
-in-channel approval eligibility.
-
-See docs/prds/agent-unblocking-initiative.md in the PromptForge repo.
-"""
+in-channel approval eligibility."""
 
 from __future__ import annotations
 
@@ -43,7 +40,7 @@ class CategoryKeyTests(unittest.TestCase):
         )
 
     def test_domainless_act_has_no_category(self):
-        # some act names have no dot; they must not be swept into a category grant.
+        # Some act names have no dot; they must not be swept into a category grant.
         self.assertIsNone(pdp_mod.category_key_for("hermes_native_act"))
 
 
@@ -125,7 +122,7 @@ class ConditionalRequestTests(unittest.TestCase):
             base_url="https://example.test", token="t", verify_key="k", agent_key="alex"
         )
         path = "/api/governance/bundles/alex"
-        p._etags[path] = 'W/"bundle-alex-production-v1"'
+        p._etags[path] = 'W/"bundle-example-production-v1"'
         captured = {}
 
         def fake_urlopen(req, timeout=None):  # noqa: ARG001
@@ -141,7 +138,7 @@ class ConditionalRequestTests(unittest.TestCase):
                 p._fetch_json(path)
             self.assertEqual(
                 captured["headers"].get("If-none-match"),
-                'W/"bundle-alex-production-v1"',
+                'W/"bundle-example-production-v1"',
             )
             with self.assertRaises(Exception):
                 p._fetch_json(path, allow_conditional=False)

@@ -91,7 +91,7 @@
     },
     {
       "id": "control-tier-without-flag-still-gates",
-      "why": "THE DIVERGENCE THIS SUITE EXISTS FOR. An act at the control tier requires approval even when its requires_approval flag is false. Both Python evaluators got this wrong until 09-15-2026, allowing outright what the TypeScript evaluators gated. Latent only because no act had ever been control-without-flag; the moment tiers are derived from process characteristics rather than typed by hand, this becomes the normal case.",
+      "why": "THE DIVERGENCE THIS SUITE EXISTS FOR. An act at the control tier requires approval even when its requires_approval flag is false. Both Python evaluators previously got this wrong, allowing outright what the TypeScript evaluators gated. Latent only because no act had ever been control-without-flag; the moment tiers are derived from process characteristics rather than typed by hand, this becomes the normal case.",
       "bundle": "standard",
       "pdp_state": "normal",
       "tool_name": "reports.generate",

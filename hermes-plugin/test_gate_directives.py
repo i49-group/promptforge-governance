@@ -4,8 +4,6 @@ The defect this slice fixes: the gate returned {"action": "block"} for `deny` an
 `require_approval` alike, flattening a three-valued decision onto two-valued
 enforcement — so approval-flagged acts behaved as hard denials and every one
 cost a policy-edit-publish-wait cycle.
-
-See docs/prds/agent-unblocking-initiative.md in the PromptForge repo.
 """
 
 from __future__ import annotations

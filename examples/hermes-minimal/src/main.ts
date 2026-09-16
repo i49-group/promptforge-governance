@@ -11,7 +11,7 @@ async function main() {
   const baseUrl = process.env.PF_BASE_URL;
   const token = process.env.PF_SERVICE_TOKEN;
   const verifyKey = process.env.PF_BUNDLE_VERIFY_KEY;
-  const agentKey = process.env.PF_AGENT_KEY || 'penn';
+  const agentKey = process.env.PF_AGENT_KEY || 'my-agent';
 
   if (!baseUrl || !token || !verifyKey) {
     console.error(

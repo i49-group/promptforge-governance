@@ -104,6 +104,31 @@ class GateDirectiveTests(unittest.TestCase):
         )
         self.assertEqual(result["rule_key"], "hermes_native_act")
 
+    def test_category_grain_does_not_reach_a_prefixed_mcp_act(self):
+        """
+        Documents a live gap rather than a desired behaviour.
+
+        Category grain is derived by splitting the act name on a dot. Hosts emit MCP acts
+        as `mcp__<server>__<domain>_<action>` — no dot — so the category never resolves and
+        each act must be approved individually. The test above passes because it uses the
+        dotted spelling, which policies are *written* in and which hosts never *send*.
+
+        That is the same shape as the package-import failure: a suite that only exercises
+        the form which works cannot see the form which does not. Asserting the gap keeps it
+        visible until act-name canonicalization maps the emitted spelling onto the stored
+        one; at that point this test should fail, and the fix is to invert it.
+        """
+        result = self._run(
+            FakePdp("require_approval", inline_approval=True),
+            tool="mcp__example_server__email_send_now",
+        )
+        self.assertEqual(result["rule_key"], "mcp__example_server__email_send_now")
+        self.assertNotEqual(
+            result["rule_key"],
+            "email.write",
+            "if this now resolves to a category, canonicalization has landed — invert this test",
+        )
+
     def test_denial_revalidates_once_before_refusing(self):
         pdp = FakePdp("deny")
         self._run(pdp)

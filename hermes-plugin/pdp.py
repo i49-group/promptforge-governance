@@ -18,6 +18,8 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 from uuid import uuid4
 
+from derive import candidate_acts, derive_facets
+
 
 class PdpError(Exception):
     pass
@@ -144,6 +146,78 @@ def evaluate_against_bundle(
         "correlation_id": corr,
         "pdp_state": pdp_state,
     }
+
+
+_DECISION_RANK = {"allow": 0, "require_approval": 1, "deny": 2}
+
+
+def evaluate_derived(
+    payload: dict,
+    tool_name: str,
+    args: Optional[dict] = None,
+    agent_key: Optional[str] = None,
+    pdp_state: str = "normal",
+    correlation_id: Optional[str] = None,
+) -> dict:
+    """Evaluate a call against its derived acts, falling back to the base act.
+
+    Layered ABOVE evaluate_against_bundle, never inside it. That function is locked
+    line-for-line to the TypeScript reference and proven equivalent by the conformance
+    vectors; narrowing is a policy-enforcement-point concern, because only the host knows
+    the shape of a tool's arguments. So this composes the reference evaluator instead of
+    modifying it, and the decision contract stays byte-identical.
+
+    Semantics:
+      * Derive the facets of the call (see derive.py) and evaluate every derived act the
+        policy actually lists.
+      * Combine most-restrictive-wins — deny over require_approval over allow, and the
+        higher tier within a decision. A command that both reaches the network and writes
+        a file is judged by whichever facet is governed more tightly.
+      * If the policy lists NO derived act, fall back to the base act. This is what lets
+        derivation ship to a fleet without denying a call: a policy tightens only when it
+        opts in by naming a derived act.
+      * Record why narrowing did or did not apply, always. `derived_act:<name>` when it
+        did; `args_unavailable`, `unclassified`, or `derived_unlisted` when it did not.
+        Silent non-narrowing would be indistinguishable from having nothing to narrow,
+        which is the failure mode this whole codebase is built against.
+    """
+    facets, notes = derive_facets(tool_name, args, agent_key)
+    candidates = candidate_acts(tool_name, facets)
+    tools = payload.get("tools") or {}
+    listed = [act for act in candidates if act in tools]
+
+    if not listed:
+        result = evaluate_against_bundle(payload, tool_name, pdp_state, correlation_id)
+        reasons = list(result.get("reasons") or [])
+        reasons.extend(notes)
+        if candidates and not notes:
+            # Facets were derived but the policy names none of them, so the narrow
+            # restriction this call would have hit does not exist yet. Visible, so the
+            # gap is reportable rather than merely absent.
+            reasons.append("derived_unlisted:" + ",".join(candidates))
+        result["reasons"] = reasons
+        result["derived_facets"] = facets
+        return result
+
+    evaluated = [
+        (act, evaluate_against_bundle(payload, act, pdp_state, correlation_id))
+        for act in listed
+    ]
+    worst_act, worst = max(
+        evaluated,
+        key=lambda pair: (
+            _DECISION_RANK.get(pair[1].get("decision", "deny"), 2),
+            TIER_RANK.get(pair[1].get("tier", "control"), 2),
+        ),
+    )
+    result = dict(worst)
+    reasons = list(result.get("reasons") or [])
+    reasons.append(f"derived_act:{worst_act}")
+    if len(listed) > 1:
+        reasons.append("derived_considered:" + ",".join(listed))
+    result["reasons"] = reasons
+    result["derived_facets"] = facets
+    return result
 
 
 def category_key_for(tool_name: str) -> Optional[str]:
@@ -356,7 +430,19 @@ class GovernancePdp:
             return "grace"
         return "fail_closed"
 
-    def evaluate(self, tool_name: str, correlation_id: Optional[str] = None) -> dict:
+    def evaluate(
+        self,
+        tool_name: str,
+        correlation_id: Optional[str] = None,
+        args: Optional[dict] = None,
+    ) -> dict:
+        """Evaluate a tool call.
+
+        `args` is optional and used only to narrow the act name (see derive.py); the
+        decision itself is still made on a name. Omitting it is safe and preserves the
+        previous behaviour exactly, but the decision will carry `args_unavailable` so a
+        host that stops passing arguments is visible rather than silently coarser.
+        """
         corr = correlation_id or str(uuid4())
         state = self._derive_state()
         if not self.bundle:
@@ -370,9 +456,11 @@ class GovernancePdp:
                 "pdp_state": "fail_closed",
             }
 
-        return evaluate_against_bundle(
+        return evaluate_derived(
             self.bundle.get("payload") or {},
             tool_name,
+            args=args,
+            agent_key=self.agent_key,
             pdp_state=state,
             correlation_id=corr,
         )

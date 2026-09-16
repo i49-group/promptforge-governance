@@ -60,10 +60,30 @@ effect of most specifically-named tools. Denying `browser.exec` while granting `
 *label*, not a *capability*: the same fetch is one `curl` away. Denying a process-management tool
 while granting a shell denies nothing at all.
 
-So: **tool-name policy is only as strong as the broadest tool the agent holds.** Govern the
-general-purpose tools at least as strictly as the specific ones, or do not grant them. A policy that
+So: **tool-name policy is only as strong as the broadest tool the agent holds.** A policy that
 denies twenty narrow tools while allowing a shell has documented an intention, not imposed a
 constraint.
+
+**Partial mitigation: act-name derivation.** For the tools that name a *mechanism* rather than a
+capability, the Hermes plugin narrows the name before the PDP sees it — a `terminal` call running
+`curl` is offered as `terminal.network`, one signalling a process as `terminal.process`, one
+scheduling work as `terminal.schedule`. Several facets can apply at once and the most restrictive
+governs. This keeps the PDP purely name-based while making the name specific enough to bind. See
+[`hermes-plugin/derive.py`](hermes-plugin/derive.py).
+
+Three things to understand about it:
+
+- **It is opt-in per policy.** Until a policy lists `terminal.network`, a `curl` resolves to
+  `terminal` exactly as before, so this can be deployed to a running fleet without denying a call.
+  Adding the derived act is what activates the constraint.
+- **It does not make policy argument-aware.** The decision is still made on a name. Recipient
+  counts, monetary amounts, and record scope remain invisible to it.
+- **It is pattern-based, therefore incomplete.** A command shape outside the pattern set derives
+  nothing and falls back to the base act. When that happens the decision records
+  `unclassified` — or `args_unavailable` if the host passed no arguments at all — so
+  a gap is visible in the decision trail rather than being silently indistinguishable from a
+  call that had nothing to narrow. Treat a derived-act policy as raising the cost of substitution,
+  not as closing it.
 
 **2. Peers.** An agent that can delegate to another agent can ask that agent to do what it was
 denied. If the peer is ungoverned, the denial is advisory — the work happens, one hop away, with no

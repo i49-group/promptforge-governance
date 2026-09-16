@@ -232,26 +232,26 @@ def on_session_start(**kwargs: Any) -> None:
 
 def pre_tool_call(
     tool_name: str = "",
-    args: Optional[dict] = None,  # noqa: ARG001 — accepted, deliberately not evaluated
+    args: Optional[dict] = None,
     task_id: str = "",
     **kwargs: Any,
 ) -> Optional[dict]:
     """
     PEP gate. Returns Hermes block directive with clear user-facing next steps.
 
-    `args` is accepted to match the host's hook signature and is **deliberately not
-    used**: policy is evaluated on tool identity alone. Two consequences the caller
-    should know, both documented in the README threat model:
+    `args` is used ONLY to narrow the act name before evaluation — never to make the
+    decision. `terminal` running `curl` is offered to the PDP as `terminal.network`, so
+    the PDP remains purely name-based while the name it judges is specific enough to mean
+    something. See derive.py for the mechanism and the reasoning.
 
-      * The same tool called against one record and against fifty thousand is one
-        decision. Distinguish them by giving them different tool names, or not at all.
-      * A granted general-purpose tool — shell, code interpreter, HTTP client — can
-        reproduce most specifically-named tools, so denying a narrow act while granting
-        a broad one denies a label rather than a capability.
+    What this does and does not change:
 
-    Do not add argument inspection here alone. The decision must stay identical across
-    every evaluator (see conformance/vectors.json), so the request shape, the reference
-    implementation, and the vectors have to change together.
+      * It does NOT make policy argument-aware. The same act called against one record
+        and against fifty thousand is still one decision. Distinguish them by act name.
+      * It DOES close the substitution gap for the acts that name a mechanism rather than
+        a capability, which is where the gap actually was.
+      * A policy that lists no derived act behaves exactly as before, and the decision
+        records that narrowing did not apply.
     """
     agent = _agent_key_label()
     name = (tool_name or kwargs.get("name") or "").strip()
@@ -273,7 +273,7 @@ def pre_tool_call(
                     ),
                 }
 
-        result = pdp.evaluate(name, correlation_id=task_id or None)
+        result = pdp.evaluate(name, correlation_id=task_id or None, args=args)
         if result["decision"] == "allow":
             _report(
                 pdp,
@@ -291,7 +291,7 @@ def pre_tool_call(
         try:
             meta = pdp.refresh()
             _mark_ready(meta)
-            result = pdp.evaluate(name, correlation_id=task_id or None)
+            result = pdp.evaluate(name, correlation_id=task_id or None, args=args)
             if result["decision"] == "allow":
                 _report(
                     pdp,

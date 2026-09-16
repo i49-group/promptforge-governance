@@ -64,7 +64,10 @@ class FakePdp:
     def refresh(self):
         return {"pack_version": "p1", "bundle_version": "v1", "state": "normal"}
 
-    def evaluate(self, tool_name, correlation_id=None):  # noqa: ARG002
+    # Signature must track GovernancePdp.evaluate, including `args`. The hook passes
+    # arguments so the act name can be narrowed; a fake that omits them raises
+    # TypeError inside the hook's own except clause and reports as a gate failure.
+    def evaluate(self, tool_name, correlation_id=None, args=None):  # noqa: ARG002
         return {
             "decision": self._decision,
             "tier": "efficiency",

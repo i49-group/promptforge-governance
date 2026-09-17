@@ -27,9 +27,12 @@ from derive import (
     FACET_NETWORK,
     FACET_NOTIFY,
     FACET_PROCESS,
+    FACET_PROCESS_MUTATE,
+    FACET_PROCESS_READ,
     FACET_READ,
     FACET_SCHEDULE,
     FACET_WRITE,
+    SELECTOR_ACTS,
     candidate_acts,
     derive_facets,
 )
@@ -320,6 +323,8 @@ class SharedVocabulary(unittest.TestCase):
             FACET_NOTIFY,
             FACET_SCHEDULE,
             FACET_PROCESS,
+            FACET_PROCESS_MUTATE,
+            FACET_PROCESS_READ,
             FACET_NETWORK,
             FACET_WRITE,
             FACET_READ,
@@ -329,6 +334,183 @@ class SharedVocabulary(unittest.TestCase):
     def test_the_derivable_and_dispatch_acts_match(self) -> None:
         self.assertEqual(set(DERIVABLE_ACTS), set(self.shared["derivable_acts"]))
         self.assertEqual(set(DISPATCH_ACTS), set(self.shared["dispatch_acts"]))
+
+    def test_the_selector_acts_match(self) -> None:
+        shared = self.shared["selector_acts"]
+        self.assertEqual(set(SELECTOR_ACTS), set(shared))
+        for act, keys in SELECTOR_ACTS.items():
+            self.assertEqual(list(keys), shared[act]["selector_keys"], act)
+
+
+class MultiplexerSelector(unittest.TestCase):
+    """`process` is one act name over several capabilities, chosen by an argument.
+
+    The property under test is the one that made the act ungovernable: waiting on your own
+    background command and killing an arbitrary pid must be able to get different answers.
+    """
+
+    def test_the_selector_value_becomes_the_facet(self) -> None:
+        for action, expected in (
+            ("kill", "process.kill"),
+            ("wait", "process.wait"),
+            ("poll", "process.poll"),
+        ):
+            facets, notes = derive_facets("process", {"action": action})
+            self.assertEqual(facets, [action], action)
+            self.assertEqual(candidate_acts("process", facets), [expected])
+            self.assertEqual(notes, [])
+
+    def test_kill_can_be_gated_while_wait_stays_free(self) -> None:
+        # The control Glen asked for, and the reason the coarse gate had to be reverted: gating
+        # the act name charged an approval for 97.6% of calls.
+        tools = {"process": OPEN, "process.kill": GATED}
+        wait = evaluate_derived(policy(tools), "process", {"action": "wait"}, "zander", None, "c1")
+        self.assertEqual(wait["decision"], "allow")
+        kill = evaluate_derived(policy(tools), "process", {"action": "kill"}, "zander", None, "c2")
+        self.assertEqual(kill["decision"], "require_approval")
+        self.assertIn("derived_act:process.kill", kill["reasons"])
+
+    def test_a_policy_naming_no_selector_facet_is_unchanged(self) -> None:
+        # The deployment property: this ships to a live fleet, so a policy that lists only the
+        # base act must behave exactly as it did before the selector existed.
+        tools = {"process": OPEN}
+        for action in ("wait", "poll", "kill", "log", "list"):
+            result = evaluate_derived(
+                policy(tools), "process", {"action": action}, "zander", None, "c"
+            )
+            self.assertEqual(result["decision"], "allow", action)
+            self.assertIn("derived_unlisted:process." + action, result["reasons"])
+
+    def test_an_unreadable_selector_is_recorded_not_guessed(self) -> None:
+        # A multiplexer whose mode cannot be read means every per-mode rule is unreachable for
+        # this call. Inferring a default would be inferring which capability ran.
+        facets, notes = derive_facets("process", {"pid": 4321})
+        self.assertEqual(facets, [])
+        self.assertIn("selector_unreadable", notes)
+
+    def test_a_selector_that_cannot_be_an_act_name_is_refused(self) -> None:
+        # Sanitising this into a name would derive an act no policy could ever match, while
+        # looking in the trail like a successful narrowing.
+        facets, notes = derive_facets("process", {"action": "kill; rm -rf /"})
+        self.assertEqual(facets, [])
+        self.assertIn("selector_unusable", notes)
+
+    def test_a_multiplexer_does_not_scan_its_arguments_as_a_command(self) -> None:
+        facets, _ = derive_facets("process", {"action": "wait", "command": "curl https://x.test"})
+        self.assertEqual(facets, ["wait"])
+
+
+class ProcessFacetGrain(unittest.TestCase):
+    """Reading the process table and signalling something in it are not the same capability."""
+
+    def test_mutation_and_inspection_are_separated(self) -> None:
+        for command in (
+            "kill -TERM 4321",
+            "pkill -f gateway",
+            "launchctl bootout gui/501/com.example.agent",
+            "launchctl kickstart -k gui/501/com.example.agent",
+            "systemctl restart nginx",
+        ):
+            facets, _ = derive_facets("terminal", {"command": command})
+            self.assertIn(FACET_PROCESS_MUTATE, facets, command)
+
+        for command in (
+            "ps aux | head",
+            "pgrep -f gateway",
+            "launchctl print gui/501/com.example.agent",
+            "launchctl list",
+            "systemctl status nginx",
+        ):
+            facets, _ = derive_facets("terminal", {"command": command})
+            self.assertIn(FACET_PROCESS_READ, facets, command)
+            self.assertNotIn(FACET_PROCESS_MUTATE, facets, command)
+
+    def test_spawning_earns_no_sub_facet(self) -> None:
+        # Starting a process is what `terminal` and `execute_code` are. A gate here would charge
+        # for the act already granted, and it was the largest bucket in the measurement.
+        for command in ("nohup ./worker.sh &", "python3 -c 'import subprocess'"):
+            facets, _ = derive_facets("terminal", {"command": command})
+            self.assertIn(FACET_PROCESS, facets, command)
+            self.assertNotIn(FACET_PROCESS_MUTATE, facets, command)
+
+    def test_the_coarse_facet_is_still_emitted(self) -> None:
+        # Backwards compatibility with teeth: an existing policy gating `terminal.process` keeps
+        # gating every command it gated before, including reads. Loosening reads requires an
+        # explicit edit — drop the coarse entry, list the sub-facets — and is never automatic.
+        tools = {"terminal": OPEN, "terminal.process": GATED}
+        result = evaluate_derived(
+            policy(tools), "terminal", {"command": "launchctl print gui/501/x"}, "zander", None, "c"
+        )
+        self.assertEqual(result["decision"], "require_approval")
+        self.assertIn("derived_act:terminal.process", result["reasons"])
+
+    def test_sub_facets_let_reads_run_while_mutations_gate(self) -> None:
+        tools = {"terminal": OPEN, "terminal.process.mutate": GATED}
+        read = evaluate_derived(
+            policy(tools), "terminal", {"command": "launchctl print gui/501/x"}, "zander", None, "c"
+        )
+        self.assertEqual(read["decision"], "allow")
+        mutate = evaluate_derived(
+            policy(tools), "terminal", {"command": "launchctl bootout gui/501/x"}, "z", None, "c"
+        )
+        self.assertEqual(mutate["decision"], "require_approval")
+
+
+class ProseSuppression(unittest.TestCase):
+    """A gate must fire on a capability, never on wording an agent chose.
+
+    This is the one place derivation is deliberately looser, so the tests fix both halves: what is
+    suppressed, and — more importantly — what must never be.
+    """
+
+    def test_a_facet_word_inside_a_written_note_does_not_derive(self) -> None:
+        # The observed case. No process was signalled; a word was written in a decision log.
+        command = "decisions_compile.py append --topic 'Fall ads table for Tue kill switch'"
+        facets, notes = derive_facets("terminal", {"command": command})
+        self.assertNotIn(FACET_PROCESS, facets)
+        suppressed = [n for n in notes if n.startswith("prose_only:")]
+        self.assertEqual(len(suppressed), 1, notes)
+        self.assertIn(FACET_PROCESS, suppressed[0].split(":", 1)[1].split(","))
+        # The absence is explained, so it must not also be reported as a gap in the pattern set.
+        self.assertNotIn("unclassified", notes)
+
+    def test_suppression_is_never_silent(self) -> None:
+        # The loosening has to reach the decision trail, or it becomes the thing this codebase
+        # exists to prevent: a control that quietly stopped applying.
+        _, notes = derive_facets(
+            "terminal", {"command": "note.py --message 'we should cron the weekly digest soon'"}
+        )
+        self.assertTrue(any(n.startswith("prose_only:") for n in notes), notes)
+
+    def test_a_short_quoted_command_still_derives(self) -> None:
+        facets, _ = derive_facets("terminal", {"command": "sh -c 'kill 5'"})
+        self.assertIn(FACET_PROCESS, facets)
+
+    def test_a_span_introduced_for_execution_is_never_suppressed(self) -> None:
+        # Four or more words, no shell punctuation — but `-c` means the shell will run it.
+        facets, _ = derive_facets(
+            "terminal", {"command": "bash -c 'kill the stuck worker now'"}
+        )
+        self.assertIn(FACET_PROCESS, facets)
+
+    def test_nothing_is_suppressed_when_text_is_piped_to_an_interpreter(self) -> None:
+        # Here the quoted span is source code, not prose.
+        for command in (
+            "echo 'kill the stuck worker now' | sh",
+            "printf 'launchctl bootout gui 501 x' | bash",
+        ):
+            facets, _ = derive_facets("terminal", {"command": command})
+            self.assertIn(FACET_PROCESS, facets, command)
+
+    def test_a_real_command_alongside_prose_still_derives(self) -> None:
+        # Suppression removes the note's text, not the command that follows it.
+        facets, notes = derive_facets(
+            "terminal",
+            {"command": "log.py --note 'cleaning up the old kill scripts' && pkill -f worker"},
+        )
+        self.assertIn(FACET_PROCESS, facets)
+        self.assertIn(FACET_PROCESS_MUTATE, facets)
+        self.assertNotIn("prose_only:process", notes)
 
 
 class CandidateNaming(unittest.TestCase):

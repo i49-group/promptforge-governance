@@ -10,9 +10,17 @@
     "",
     "Canonical here. `hermes-plugin/test_derive.py` asserts the Python constants match this file,",
     "and it is mirrored into PromptForge's governance-pdp package for the publish-time check.",
-    "Adding a facet means adding it here first."
+    "Adding a facet means adding it here first.",
+    "",
+    "`selector_acts` is the second kind of derived name. A multiplexer act chooses its capability",
+    "from an argument rather than from a command string, so its facet is the argument's value and",
+    "the set is open-ended: `process{action: kill}` derives `process.kill`. `observed_values` lists",
+    "the values a host on this fleet has actually sent, so a checker can accept `process.kill` as",
+    "legitimate while still flagging `process.klil` as the typo it is. Absence from that list is a",
+    "warning and never a failure — a host may add a mode tomorrow, and a policy author gating a",
+    "mode before it is first used is doing the right thing in the right order."
   ],
-  "version": 1,
+  "version": 2,
   "facets": [
     "credential",
     "cross_profile",
@@ -20,10 +28,18 @@
     "notify",
     "schedule",
     "process",
+    "process.mutate",
+    "process.read",
     "network",
     "write",
     "read"
   ],
   "derivable_acts": ["terminal", "execute_code", "read_file", "write_file", "patch"],
-  "dispatch_acts": ["tool_call"]
+  "dispatch_acts": ["tool_call"],
+  "selector_acts": {
+    "process": {
+      "selector_keys": ["action", "operation", "subcommand", "mode"],
+      "observed_values": ["wait", "poll", "log", "list", "kill"]
+    }
+  }
 }

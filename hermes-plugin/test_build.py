@@ -77,6 +77,70 @@ class BuildIdentity(unittest.TestCase):
         self.assertEqual(headers["X-PromptForge-Pep-Instance"], build_mod.INSTANCE)
 
 
+class RuntimeRole(unittest.TestCase):
+    """What kind of process is enforcing, so residency can be judged (P-134).
+
+    The duplicate-enforcement-point check counts resident instances per agent and fails on two. That
+    is right for gateways and wrong the moment a human opens a CLI session beside one — which is how
+    this was found: a bare `hermes` on a tty was reported as a breach when it was a person working.
+    """
+
+    def _role(self, argv: list) -> str:
+        with mock.patch.object(sys, "argv", argv):
+            return build_mod.runtime_role()
+
+    def test_a_gateway_is_a_gateway(self) -> None:
+        self.assertEqual(
+            self._role(["hermes", "--profile", "alex", "gateway", "run"]), build_mod.ROLE_GATEWAY
+        )
+
+    def test_a_bare_session_is_interactive(self) -> None:
+        self.assertEqual(self._role(["hermes"]), build_mod.ROLE_INTERACTIVE)
+
+    def test_a_session_with_only_flags_is_interactive(self) -> None:
+        self.assertEqual(
+            self._role(["hermes", "--profile", "alex"]), build_mod.ROLE_INTERACTIVE
+        )
+
+    def test_the_dashboard_is_the_dashboard(self) -> None:
+        self.assertEqual(self._role(["hermes", "dashboard"]), build_mod.ROLE_DASHBOARD)
+
+    def test_a_profile_named_like_a_utility_is_still_a_gateway(self) -> None:
+        # A flag's *value* is not the command. Getting this wrong would let a real gateway be
+        # excused from the one-per-agent rule by the name of the profile it runs.
+        self.assertEqual(
+            self._role(["hermes", "--profile", "dashboard", "gateway", "run"]),
+            build_mod.ROLE_GATEWAY,
+        )
+
+    def test_an_inline_flag_value_is_not_the_command(self) -> None:
+        self.assertEqual(
+            self._role(["hermes", "--profile=dashboard", "gateway", "run"]),
+            build_mod.ROLE_GATEWAY,
+        )
+
+    def test_an_unrecognised_command_is_not_promoted_to_gateway(self) -> None:
+        """Fails toward being counted, not excused. `gateway` is the role required to be alone, so
+        an unknown shape must never land there — that would launder a second gateway into silence.
+        """
+        self.assertEqual(
+            self._role(["hermes", "some-future-serve-command"]), build_mod.ROLE_COMMAND
+        )
+
+    def test_the_role_is_carried_on_every_fetch(self) -> None:
+        with mock.patch.object(sys, "argv", ["hermes"]):
+            self.assertEqual(
+                build_mod.build_headers()["X-PromptForge-Pep-Role"], build_mod.ROLE_INTERACTIVE
+            )
+
+    def test_the_role_is_never_absent(self) -> None:
+        # An absent role is indistinguishable from a pre-1.5 plugin, which the check must warn
+        # about. This build has no excuse to produce that state.
+        for argv in ([], ["hermes"], ["hermes", "gateway"], ["hermes", "-x"], ["hermes", "--"]):
+            with mock.patch.object(sys, "argv", argv):
+                self.assertTrue(build_mod.build_headers()["X-PromptForge-Pep-Role"])
+
+
 class InstanceIdentity(unittest.TestCase):
     """The instance id is what makes a second enforcement point visible.
 

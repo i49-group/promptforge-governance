@@ -20,10 +20,11 @@ standing check compares.
 from __future__ import annotations
 
 import hashlib
+import sys
 import uuid
 from pathlib import Path
 
-VERSION = "1.4.0"
+VERSION = "1.5.0"
 
 # Runtime modules only. Tests are excluded because they do not enforce anything, and including
 # them would report a new build for a change that cannot alter a decision.
@@ -71,6 +72,61 @@ BUILD = _compute_build()
 # is answered by how many distinct ids are still fetching, not by how many have ever appeared.
 INSTANCE = uuid.uuid4().hex[:12]
 
+ROLE_GATEWAY = "gateway"
+ROLE_DASHBOARD = "dashboard"
+ROLE_INTERACTIVE = "interactive"
+ROLE_COMMAND = "command"
+
+
+def _positionals(argv: list[str]) -> list[str]:
+    """Argument words that are not flags or flag values.
+
+    Deliberately a heuristic, not a parse. This plugin must not encode the host's CLI grammar: a
+    hidden dependency on someone else's argument spec breaks quietly the first time they add a flag,
+    and it would break the *identity* of an enforcement point, which is the one thing here that has
+    to keep working. A word after a `--flag` is dropped as its possible value, which can drop a real
+    subcommand — so this is only ever used to tell "no subcommand" from "some subcommand", never to
+    decide which one.
+    """
+    words: list[str] = []
+    skip_next = False
+    for arg in argv:
+        if skip_next:
+            skip_next = False
+            continue
+        if arg.startswith("--"):
+            skip_next = "=" not in arg
+            continue
+        if arg.startswith("-"):
+            continue
+        words.append(arg)
+    return words
+
+
+def runtime_role() -> str:
+    """What *kind* of process is enforcing, so residency can be judged (P-134).
+
+    The duplicate-enforcement-point check counts resident instances per agent and fails on two,
+    which is right for gateways and wrong the moment a human opens a CLI session beside one. That
+    happened the night roles were added: a bare `hermes` on a tty was reported as a breach when it
+    was a person working. A check that fails on ordinary use gets muted, and this one is the only
+    thing that has ever caught a process enforcing nothing (P-128) — so the count needs to know
+    which residents are supposed to be alone.
+
+    `gateway` is matched before anything else because `--profile dashboard gateway run` is a
+    gateway: a flag *value* is not the command. Unrecognised shapes fall to `command` rather than
+    to `gateway`, so nothing here can quietly launder a second gateway into an allowed role.
+    """
+    argv = sys.argv[1:]
+    words = _positionals(argv)
+    if ROLE_GATEWAY in words:
+        return ROLE_GATEWAY
+    if ROLE_DASHBOARD in words:
+        return ROLE_DASHBOARD
+    if not words:
+        return ROLE_INTERACTIVE
+    return ROLE_COMMAND
+
 
 def build_headers() -> dict:
     """Headers identifying this build, sent on every governance fetch.
@@ -85,4 +141,8 @@ def build_headers() -> dict:
         "X-PromptForge-Pep-Build": BUILD,
         "X-PromptForge-Pep-Version": VERSION,
         "X-PromptForge-Pep-Instance": INSTANCE,
+        # Read per call rather than frozen at import like BUILD and INSTANCE. Those describe things
+        # that genuinely cannot change while the process lives; the role is derived from argv, and a
+        # constant would silently make the value untestable and its two readers able to disagree.
+        "X-PromptForge-Pep-Role": runtime_role(),
     }

@@ -24,18 +24,19 @@ from __future__ import annotations
 
 import logging
 import os
-import sys
 import threading
 from collections import OrderedDict
 from typing import Any, Optional
 
 try:
     from .pdp import GovernancePdp, PdpError
+    from . import build
     from . import pdp as pdp_mod
     from . import messages as msg
     from .reporter import DecisionReporter
 except ImportError:  # loaded as flat plugin directory on sys.path
     from pdp import GovernancePdp, PdpError  # type: ignore
+    import build  # type: ignore
     import pdp as pdp_mod  # type: ignore
     import messages as msg  # type: ignore
     from reporter import DecisionReporter  # type: ignore
@@ -57,7 +58,7 @@ _warned_user = False
 # timer at all — a denial revalidates on the spot.
 DEFAULT_REFRESH_SECONDS = 300
 
-# Processes that carry an agent's credentials but are not the agent. `hermes dashboard` shares the
+# Roles that carry an agent's credentials but are not the agent. `hermes dashboard` shares the
 # default profile's home, so it loads this plugin and — once the heartbeat moved to plugin load —
 # began polling as a second resident enforcement point for that agent. A read-only UI should not
 # appear in the count of things enforcing policy.
@@ -66,7 +67,7 @@ DEFAULT_REFRESH_SECONDS = 300
 # same lesson: the dangerous failure is a process that enforces nothing and reports nothing, since
 # absence looks exactly like quiet (P-115, P-122, P-128). An unrecognised command therefore keeps
 # both its hooks and its heartbeat — a spurious heartbeat is noise, a missing one is a blind spot.
-_NON_AGENT_COMMANDS = frozenset({"dashboard"})
+_NON_AGENT_ROLES = frozenset({build.ROLE_DASHBOARD})
 
 
 # Escalated acts awaiting a human answer, keyed by tool call. Bounded: an approval
@@ -222,14 +223,11 @@ def _refresh_loop(interval_s: float) -> None:
 def _is_agent_runtime() -> bool:
     """Whether this process is a runtime that can act as the agent, and so should heartbeat.
 
-    A bare `hermes` — no subcommand — is the interactive session, which is long-lived and *does*
-    execute tools; that is precisely what the unsupervised process in P-128 was. It must stay
-    visible, so absence of a subcommand means yes.
+    A bare `hermes` — the interactive role — is long-lived and *does* execute tools; that is
+    precisely what the unsupervised process in P-128 was. It heartbeats, and the standing check
+    now distinguishes it from a gateway by role rather than by refusing to count it (P-134).
     """
-    args = set(sys.argv[1:])
-    if "gateway" in args:
-        return True  # e.g. `--profile dashboard gateway run`: a flag value is not the command
-    return not (args & _NON_AGENT_COMMANDS)
+    return build.runtime_role() not in _NON_AGENT_ROLES
 
 
 def _start_refresh_loop() -> None:

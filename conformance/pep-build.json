@@ -1,0 +1,16 @@
+{
+  "$comment": "GENERATED — do not hand-edit. Regenerate with: pnpm build:record-pep-build",
+  "build": "1087d329cf0f",
+  "recorded": "2026-09-17",
+  "algorithm": "sha256, updated with each module's filename then its bytes, in the order given by `modules`; first 12 hex characters of the digest",
+  "modules": [
+    "__init__.py",
+    "actname.py",
+    "build.py",
+    "derive.py",
+    "messages.py",
+    "pdp.py",
+    "reporter.py"
+  ],
+  "why": "PromptForge cannot compute this. The plugin sources live only in this repository, so PromptForge can be told what the current build is but can never derive it — and without being told, its enforcement-point check can only prove the agents agree WITH EACH OTHER. A fleet where every gateway is equally stale has no internal disagreement to observe and passes silently, which is P-121's original scenario and exactly what a missed deploy produces. See P-138."
+}

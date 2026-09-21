@@ -155,6 +155,7 @@ can verify none of them for you.
 
 | Guide | Audience |
 |-------|----------|
+| [Implementer's Guide](docs/guides/implementers-guide.md) | Next implementer — PEP contract, one-gateway-per-agent, best practices |
 | [AI Governance Configuration Guide](docs/guides/ai-governance-configuration-guide.md) | Org admins — configure packages in PromptForge |
 | [Import example JSON](docs/guides/ai-governance-package-import.example.json) | Appendix — paste into New package |
 | [Hermes Plugin Implementation Guide](docs/guides/hermes-plugin-implementation-guide.md) | Operators — **install & verify** Act enforcement on Hermes |

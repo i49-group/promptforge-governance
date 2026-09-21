@@ -4,6 +4,9 @@
 **Plugin path in this repo:** [`hermes-plugin/`](../../hermes-plugin/)  
 **Hermes docs:** [Plugins](https://hermes-agent.nousresearch.com/docs/user-guide/features/plugins) · [Hooks](https://hermes-agent.nousresearch.com/docs/user-guide/features/hooks)
 
+For the PEP contract, one-gateway-per-agent, and the other
+best practices, see the [Implementer's Guide](./implementers-guide.md).
+
 ---
 
 ## 1. What you are installing

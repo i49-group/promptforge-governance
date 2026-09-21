@@ -10,12 +10,49 @@ assumed from the fact that a hash is being computed.
 from __future__ import annotations
 
 import hashlib
+import json
 import sys
 import unittest
 from pathlib import Path
 from unittest import mock
 
 import build as build_mod
+
+
+class RecordedBuild(unittest.TestCase):
+    """`conformance/pep-build.json` must match the build this code actually reports.
+
+    PromptForge cannot compute this hash — the sources live only in this repository — so its
+    enforcement-point check compares the fleet against the recorded value instead. That comparison
+    is the only way a *uniformly* stale fleet is detectable: when every gateway is equally out of
+    date there is no disagreement between them to observe, so the check that proves "the agents
+    agree with each other" passes with the entire fleet behind (P-138).
+
+    The whole scheme rests on the recorded value being current, and the only thing that can keep it
+    current is a test that fails when it is not. Without this, editing `pdp.py` and forgetting to
+    regenerate leaves PromptForge confidently comparing the fleet against a hash that describes code
+    nobody is running — a check that reports health while measuring the wrong thing, which is the
+    defect class this repository has spent P-121, P-128 and P-134 removing.
+    """
+
+    def setUp(self) -> None:
+        self.path = Path(build_mod.__file__).resolve().parent.parent / "conformance" / "pep-build.json"
+        self.recorded = json.loads(self.path.read_text())
+
+    def test_the_recorded_build_matches_this_code(self) -> None:
+        self.assertEqual(
+            self.recorded["build"],
+            build_mod.BUILD,
+            f"\n\n{self.path.name} records {self.recorded['build']} but this code computes "
+            f"{build_mod.BUILD}.\n\nAn enforcing module changed and the recorded build was not "
+            f"regenerated. Until it is, PromptForge compares the fleet against a hash for code "
+            f"nobody runs — so a stale fleet reads as current and a current fleet reads as stale.\n\n"
+            f"Fix: pnpm build:record-pep-build\n",
+        )
+
+    def test_the_recorded_module_list_matches_what_is_hashed(self) -> None:
+        """A module added to the hash but missing here would make the record silently incomplete."""
+        self.assertEqual(list(self.recorded["modules"]), list(build_mod._RUNTIME_MODULES))
 
 
 class BuildIdentity(unittest.TestCase):
@@ -45,6 +82,14 @@ class BuildIdentity(unittest.TestCase):
 
         `derive.py` and `reporter.py` were both added after the first version of this plugin, and
         either could have been left out of the hash without any test noticing.
+
+        There is deliberately no exclusion list. This test, `test_import_modes._SIBLINGS` and the
+        dual-mode import rule together assert one property of this directory — **everything in it is
+        enforcing code a host loads** — and the way to keep that property is to keep the tests
+        absolute and put non-runtime tooling somewhere else. All three flagged `record_build.py` on
+        the day it was written; it moved to `scripts/` rather than earning three exemptions, because
+        each exemption would have made its guard slightly worse at catching the next enforcing module
+        added without care.
         """
         here = Path(build_mod.__file__).resolve().parent
         on_disk = {

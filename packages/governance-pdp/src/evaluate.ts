@@ -1,5 +1,4 @@
 import { randomUUID } from 'crypto';
-import { resolutionCandidates } from './actname';
 import type {
   EvaluateRequest,
   EvaluateResult,
@@ -20,34 +19,18 @@ function maxTier(a: GovernanceTier, b: GovernanceTier): GovernanceTier {
   return TIER_RANK[a] >= TIER_RANK[b] ? a : b;
 }
 
+/**
+ * Exact lookup only. PromptForge compiles each policy entry into the exact names every
+ * enforcement point sends, so a name is never parsed, split or grouped here: a name the
+ * bundle does not list is unknown, and unknown denies.
+ */
 export function resolveToolPolicy(
   payload: PolicyBundlePayload,
   toolName: string
 ): ToolPolicy | null {
-  // Exact first, then the canonical dotted form. Order matters for safety, not style: an
-  // act that resolves today resolves to the same entry after this change, so
-  // canonicalization can only reach entries that were previously unreachable.
-  for (const candidate of resolutionCandidates(toolName)) {
-    if (payload.tools[candidate]) {
-      return payload.tools[candidate];
-    }
-  }
-
-  // DEPRECATED fallback: a default policy for acts the bundle does not list, keyed by a
-  // `{domain}.{read|write}` group parsed out of the act name. It only ever works for acts
-  // *named* in dotted form, which is not the form hosts send, so in practice it resolves
-  // nothing. Retained unchanged for bundles that relied on it; author acts explicitly
-  // instead. Do not extend this to canonicalized names — that would grant a policy nobody
-  // wrote for acts nobody listed.
-  const [domain, action] = toolName.split('.');
-  if (!domain || !action) return null;
-
-  const isRead =
-    action.startsWith('get_') ||
-    action.startsWith('list_') ||
-    action === 'search';
-  const categoryKey = `${domain}.${isRead ? 'read' : 'write'}`;
-  return payload.tool_categories?.[categoryKey] ?? null;
+  return Object.prototype.hasOwnProperty.call(payload.tools, toolName)
+    ? payload.tools[toolName]
+    : null;
 }
 
 /**

@@ -32,21 +32,17 @@ class PdpTests(unittest.TestCase):
         self.assertNotIn("=", sig)
         self.assertRegex(sig, r"^[A-Za-z0-9_-]+$")
 
-    def test_resolve_category(self) -> None:
+    def test_resolve_is_exact_only(self) -> None:
+        granted = {"tier": "velocity", "requires_approval": False, "granted": True}
         payload = {
-            "tools": {},
-            "tool_categories": {
-                "calendar.read": {
-                    "tier": "velocity",
-                    "requires_approval": False,
-                    "granted": True,
-                }
-            },
+            "tools": {"calendar.get_events": granted},
+            "tool_categories": {"calendar.read": granted},
         }
-        pol = resolve_tool_policy(payload, "calendar.get_events")
-        self.assertIsNotNone(pol)
-        assert pol is not None
-        self.assertTrue(pol["granted"])
+        self.assertIs(resolve_tool_policy(payload, "calendar.get_events"), granted)
+        self.assertIsNone(resolve_tool_policy(payload, "calendar.list_events"))
+        self.assertIsNone(
+            resolve_tool_policy(payload, "mcp__brilliant_central__calendar_get_events")
+        )
 
     def test_evaluate_allow_deny(self) -> None:
         now = datetime.now(timezone.utc)

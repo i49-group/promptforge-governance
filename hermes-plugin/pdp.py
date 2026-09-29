@@ -23,11 +23,9 @@ from uuid import uuid4
 # import here fails under package loading, and __init__'s own fallback then masks it as
 # "No module named 'pdp'" — the plugin does not load and the agent is silently ungoverned.
 try:
-    from .actname import resolution_candidates
     from .build import build_headers
     from .derive import candidate_acts, derive_facets, dispatched_call
 except ImportError:  # loaded as flat plugin directory on sys.path
-    from actname import resolution_candidates  # type: ignore
     from build import build_headers  # type: ignore
     from derive import candidate_acts, derive_facets, dispatched_call  # type: ignore
 
@@ -206,13 +204,8 @@ def evaluate_derived(
       * If the policy lists NO derived act, the base act's own decision stands unchanged.
         This is what lets derivation ship to a fleet without denying a call: a policy
         tightens only when it opts in by naming a derived act.
-      * "Lists" means **named explicitly in `tools`** — deliberately not resolvable via a
-        category. A category like `terminal.write` would otherwise catch every derived
-        facet under that domain and silently opt a policy into narrowing nobody wrote,
-        making the tightening implicit and surprising in both directions. Derived facets
-        are an opt-in tightening; they are claimed by name or not at all. Revisit only
-        together with the category mechanism, which is inert today (see the README note on
-        category grain).
+      * "Lists" means **named explicitly in `tools`**. Derived facets are an opt-in
+        tightening; they are claimed by name or not at all.
       * Record why narrowing did or did not apply, always. `derived_act:<name>` when it
         did; `args_unavailable`, `unclassified`, or `derived_unlisted` when it did not.
         Silent non-narrowing would be indistinguishable from having nothing to narrow,
@@ -298,35 +291,6 @@ def evaluate_derived(
     return result
 
 
-def category_key_for(tool_name: str) -> Optional[str]:
-    """DEPRECATED. The `{domain}.{read|write}` group parsed out of a dotted act name.
-
-    Sole remaining use is the `tool_categories` fallback in resolve_tool_policy — a default
-    policy for acts a bundle does not list. It is **not** the approval grain any more.
-
-    It was, and that was a mistake worth recording: deriving the grain from the act's name
-    required every name to look like `domain.action`, which is a convention hosts do not
-    follow. Hosts send `mcp__server__email_send_now` and `read_file`; neither has a dot, so
-    this returned None for every real call and group approval never once fired in
-    production. The grain is now declared on the policy entry (`category`), which works for
-    any name a host chooses to use and needs no convention at all.
-
-    Kept separate from resolve_tool_policy so the evaluator's return contract stays
-    byte-identical to evaluate.ts (the conformance vectors compare both languages against
-    the same shape)."""
-    parts = tool_name.split(".")
-    domain = parts[0]
-    action = parts[1] if len(parts) > 1 else ""
-    if not domain or not action:
-        return None
-    is_read = (
-        action.startswith("get_")
-        or action.startswith("list_")
-        or action == "search"
-    )
-    return f"{domain}.{'read' if is_read else 'write'}"
-
-
 def inline_approval_enabled(payload: dict) -> bool:
     """Whether PromptForge has marked this agent eligible for in-channel approval.
 
@@ -350,29 +314,10 @@ def report_decisions_enabled(payload: dict) -> bool:
 
 
 def resolve_tool_policy(payload: dict, tool_name: str) -> Optional[dict]:
-    tools = payload.get("tools") or {}
-    # Exact first, then the canonical dotted form. Order matters for safety, not style: an
-    # act that resolves today resolves to the same entry after this change, so
-    # canonicalization can only reach entries that were previously unreachable.
-    for candidate in resolution_candidates(tool_name):
-        if candidate in tools:
-            return tools[candidate]
-
-    # DEPRECATED fallback: a default policy for acts the bundle does not list, keyed by a
-    # group parsed out of the act name. Only ever matches acts *named* in dotted form, which
-    # is not the form hosts send, so in practice it resolves nothing. Retained unchanged for
-    # bundles that relied on it; author acts explicitly instead. Do not extend to
-    # canonicalized names — that would grant a policy nobody wrote for acts nobody listed.
-    #
-    # Split on every dot and take the second segment, matching
-    # `const [domain, action] = toolName.split('.')` in evaluate.ts. Splitting
-    # once and keeping the remainder differs for names like analytics.search.daily,
-    # where the remainder is not equal to "search" but the second segment is.
-    category_key = category_key_for(tool_name)
-    if not category_key:
-        return None
-    cats = payload.get("tool_categories") or {}
-    return cats.get(category_key)
+    """Exact lookup only, matching resolveToolPolicy() in evaluate.ts. PromptForge compiles
+    each policy entry into the exact names this host sends, so nothing here parses, splits
+    or groups a name: an unlisted name is unknown, and unknown denies."""
+    return (payload.get("tools") or {}).get(tool_name)
 
 
 class GovernancePdp:

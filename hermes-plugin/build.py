@@ -24,13 +24,12 @@ import sys
 import uuid
 from pathlib import Path
 
-VERSION = "1.6.0"
+VERSION = "1.7.0"
 
 # Runtime modules only. Tests are excluded because they do not enforce anything, and including
 # them would report a new build for a change that cannot alter a decision.
 _RUNTIME_MODULES = (
     "__init__.py",
-    "actname.py",
     "build.py",
     "derive.py",
     "messages.py",

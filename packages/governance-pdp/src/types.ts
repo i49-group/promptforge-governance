@@ -69,7 +69,6 @@ export interface PolicyBundlePayload {
   grace_ms: number;
   default_tier: GovernanceTier;
   tools: Record<string, ToolPolicy>;
-  tool_categories?: Record<string, ToolPolicy>;
 }
 
 export interface SignedPolicyBundle {

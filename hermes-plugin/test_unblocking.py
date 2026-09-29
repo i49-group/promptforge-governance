@@ -25,34 +25,6 @@ def _pdp_with_expiry(expires_at: str) -> GovernancePdp:
     return p
 
 
-class CategoryKeyTests(unittest.TestCase):
-    """Covers the DEPRECATED name-parsed category, which now serves only the
-    `tool_categories` fallback — a default policy for acts a bundle does not list.
-
-    It is no longer the approval grain. That moved to a `category` declared on the policy
-    entry, because parsing it out of the name required act names to look like
-    `domain.action`, resolved for no name a host actually sends, and could never work for a
-    native name like `read_file`. See test_gate_directives.
-    """
-
-    def test_write_acts_resolve_to_write_category(self):
-        self.assertEqual(pdp_mod.category_key_for("email.send_now"), "email.write")
-
-    def test_read_prefixes_resolve_to_read_category(self):
-        for name in ("email.get_thread", "email.list_folders", "email.search"):
-            self.assertEqual(pdp_mod.category_key_for(name), "email.read")
-
-    def test_multi_segment_uses_second_segment(self):
-        # Matches evaluate.ts, which destructures split('.') rather than split('.', 1).
-        self.assertEqual(
-            pdp_mod.category_key_for("analytics.search.daily"), "analytics.read"
-        )
-
-    def test_domainless_act_has_no_category(self):
-        # Some act names have no dot; they must not be swept into a category grant.
-        self.assertIsNone(pdp_mod.category_key_for("hermes_native_act"))
-
-
 class InlineApprovalEligibilityTests(unittest.TestCase):
     def test_absent_field_is_off(self):
         # Default-off is the whole safety property: no agent gains in-channel

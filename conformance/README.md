@@ -62,13 +62,13 @@ is generated per call and is deliberately not asserted.
 
 ## Coverage today
 
-Exact match; category fallback for both reads and writes; the read classifier
-(`get_` and `list_` prefixes, and `search` matched exactly rather than by prefix);
-category denial; `control` gating with and without the flag; `default_tier`
-escalation; unknown acts; ungranted acts; domain-less act names (many real-world
-act names have no domain); malformed names with a trailing dot; multi-segment
-names; a missing `tool_categories` object; and the `fail_closed`, `grace` and
-`cached` states including reason ordering when several reasons apply.
+Exact match, and nothing but exact match: a prefixed host name does not reach a
+dotted entry, a single-underscore spelling does not reach a double-underscore
+one, and a `tool_categories` block in the bundle answers for nothing. Also
+`control` gating with and without the flag; `default_tier` escalation; unknown
+acts; ungranted acts; domain-less act names; malformed names with a trailing
+dot; multi-segment names; and the `fail_closed`, `grace` and `cached` states
+including reason ordering when several reasons apply.
 
 Not covered: signature verification, refresh and cache behaviour, and any
 policy bundle malformed enough to omit `tier` or `granted`.

@@ -152,23 +152,11 @@ works. So the one thing worth checking before you publish is that each name is r
 name your host sends. Get the list from your engineering team, or from your host's tool
 registration log, rather than from memory.
 
-<details>
-<summary>Legacy: a shorthand some older policies use</summary>
-
-Policies written before this was documented sometimes name MCP acts in a dotted shorthand —
-`email.send_now` for `mcp__acme_crm__email_send_now`. The evaluator still accepts it: an act
-is resolved by trying the exact name first, then that shorthand. Two consequences worth
-knowing:
-
-- Server identity is dropped by the shorthand, so if two MCP servers both expose
-  `email_send_now`, one shorthand entry governs both. Use exact names when they must differ.
-- The shorthand is compatibility only. Write exact names for anything new.
-
-The older `tool_categories` block — a default policy for unlisted acts, keyed by a group
-parsed out of the act name — is deprecated for the same reason: it only matched acts *named*
-in the shorthand, which is not the form hosts send. List acts explicitly instead.
-
-</details>
+The evaluator matches names exactly and nothing else. It does not turn
+`mcp__acme_crm__email_send_now` into `email.send_now`, and it does not fall back to a
+group guessed from the name. The older `tool_categories` block is no longer served or
+accepted; list each act instead. If an agent profile declares its enforcement points,
+PromptForge writes the host's exact spelling for you when it builds the bundle.
 
 ### Per-act fields
 
@@ -353,7 +341,6 @@ Paste this into **New package → Import Act from platform inventory JSON**, or 
 | `digital_worker_email` | No | Fills email if the form field is empty |
 | `platform` or `platform_source` | No | Stored as an operator note |
 | `default_tier` | No | `velocity` \| `efficiency` \| `control` (default `efficiency`) |
-| `tool_categories` | No | Optional category-level defaults (same shape as a tool policy) |
 | `ttl_ms` / `grace_ms` | No | Optional; UI/service defaults apply if omitted |
 
 Each tool policy object:

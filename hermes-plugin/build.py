@@ -24,7 +24,7 @@ import sys
 import uuid
 from pathlib import Path
 
-VERSION = "1.5.0"
+VERSION = "1.6.0"
 
 # Runtime modules only. Tests are excluded because they do not enforce anything, and including
 # them would report a new build for a change that cannot alter a decision.
@@ -132,8 +132,8 @@ def build_headers() -> dict:
     """Headers identifying this build, sent on every governance fetch.
 
     Carried on the fetch rather than only on decision reports because the fetch is the one
-    exchange every governed gateway always makes: reporting is per-agent opt-in and plain allows
-    are sampled, so decisions are a channel that can legitimately be silent. A build that never
+    exchange every governed gateway always makes: reporting is per-agent opt-in and an idle agent
+    reports nothing, so decisions are a channel that can legitimately be silent. A build that never
     reports is the signal that matters most (an agent running ungoverned looks exactly like an
     agent having a quiet day), and it is only trustworthy on a channel that cannot be switched off.
     """

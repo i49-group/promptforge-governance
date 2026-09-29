@@ -146,7 +146,12 @@ class DecisionReporter:
                 self._queue.task_done()
 
     def _post(self, payload: dict) -> None:
-        body = json.dumps(payload).encode("utf-8")
+        # A dropped report cannot announce itself, so every report that does get through
+        # carries the running counters as they stand now. PromptForge turns the gap into a
+        # number instead of an absence.
+        stats = self.stats()
+        stats.pop("enqueued", None)
+        body = json.dumps({**payload, "reporter": stats}).encode("utf-8")
         req = urllib.request.Request(
             f"{self.base_url}{DECISIONS_PATH}",
             data=body,
@@ -176,8 +181,8 @@ class DecisionReporter:
         else:
             self.rejected += 1
             # accepted=false means the decision did not reach the record: either the agent has
-            # not opted in, or the write failed. Note that a sampled-away allow is still
-            # accepted=true, so this is never merely sampling.
+            # not opted in, or the write failed. Agent decisions are never sampled, so this is
+            # never merely sampling.
             self._warn_occasionally(
                 "rejected",
                 "PromptForge did not record a decision for %s (opt-in off, or write failed)",

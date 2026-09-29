@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import importlib.util
 import io
+import json
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -279,6 +280,28 @@ class DecisionReporterTests(unittest.TestCase):
         self.assertEqual(r.rejected, 1)
         self.assertEqual(r.sent, 0)
         self.assertIn("did not record a decision", "\n".join(logged.output))
+
+    def test_every_sent_report_carries_the_losses_before_it(self):
+        # The report that follows an outage is the only place the outage can be counted.
+        r = self._reporter(queue_max=1)
+        r.dropped, r.failed, r.rejected, r.sent = 7, 2, 1, 40
+        sent: list[bytes] = []
+
+        def fake_urlopen(req, timeout):  # noqa: ARG001
+            sent.append(req.data)
+            body = io.BytesIO(b'{"success":true,"data":{"accepted":true}}')
+            body.__enter__ = lambda: body  # type: ignore[method-assign]
+            body.__exit__ = lambda *a: None  # type: ignore[method-assign]
+            return body
+
+        with mock.patch.object(reporter_mod.urllib.request, "urlopen", side_effect=fake_urlopen):
+            r.report(agent_key="a", tool_name="t", decision="allow")
+            self.assertTrue(r.drain())
+        posted = json.loads(sent[0])
+        self.assertEqual(
+            posted["reporter"], {"dropped": 7, "failed": 2, "rejected": 1, "sent": 40}
+        )
+        self.assertEqual(posted["tool_name"], "t")
 
     def test_the_environment_travels_with_every_report(self):
         r = self._reporter(environment="staging")

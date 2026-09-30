@@ -157,7 +157,8 @@ Do this once before you author a fleet.
    `source` in a shell does not reach a supervised gateway.
 
    **One process = one `PF_AGENT_KEY`.** Every agent gets its own
-   gateway. Do not share env across profiles.
+   gateway. Do not share env across profiles. Run each gateway as its
+   own OS user so agents cannot read each other's secrets (§5.10).
 
 4. Restart **only** that gateway. Confirm the five `PF_*` values on
    the process, not in your shell.
@@ -263,6 +264,52 @@ Proof is a denied tool on the host **and** `pep_*` fields on the
 access event **and** **governed** on the console. A 200 from pack
 curl is necessary and not sufficient.
 
+### 5.10 Give each agent only its own secrets
+
+The policy decides what an agent may *try*. The operating system
+decides what its tools can *reach*. If every agent runs as the same
+OS user, `chmod 700` on each workspace separates nothing: any agent's
+shell can read every other agent's secrets file, and the only thing
+in the way is a text match on the command.
+
+1. **One OS user per agent** (or one container). Put each agent's
+   secrets file under that user, mode `600`. Then "can this agent read
+   that key" is answered by the kernel, not by the policy.
+2. **Keep gateway secrets away from tools.** `PF_SERVICE_TOKEN`,
+   `PF_BUNDLE_VERIFY_KEY` and chat-platform tokens belong to the
+   gateway process. A tool subprocess that inherits them, or a secrets
+   file the agent's shell can `cat`, lets the agent act as its own
+   enforcement point: fetch bundles, post decisions.
+3. **Job scripts load their own keys, by name.** A script that needs
+   an upload key reads *that key* from the agent's secrets file and
+   ignores the rest. The command the agent runs then names no secret
+   (`python3 upload.py video.mp4`, not
+   `source .env && python3 upload.py video.mp4`).
+
+   This matters because the credential facet (§5.6) matches on the
+   command text: `.env`, `_KEY`, `_SECRET`, `_TOKEN`. A job that has
+   to name its secrets file to run trips it on every call. The facet
+   then either blocks routine work or gets granted without approval,
+   and a credential grant without approval reaches every secret the
+   OS user can read, not just the job's.
+4. **Don't fix a blocked job with a human approving each call.**
+   Someone asked to approve every routine call will approve every
+   call. Change the job so it stops tripping the facet, and keep
+   approval for the calls that really are unusual.
+5. **Never tell an agent to hide or work around a block.** An
+   instruction like "execute silently and get it done" makes it look
+   for another way to the secret (read the file through a code tool,
+   search for the key name). The facet stops that; the instruction
+   should not be what tests it.
+
+**Prove it.** From the agent's own shell, run as that agent:
+
+- Reading another agent's secrets file fails with *permission
+  denied* from the OS, not just a policy deny.
+- `env | cut -d= -f1` in a tool call shows no gateway secret names.
+- The job command derives no `credential` facet and runs under the
+  plain shell grant.
+
 ---
 
 ## 6. Writing a PEP of your own
@@ -282,6 +329,7 @@ Minimum:
 4. Report decisions only when the bundle says `report_decisions`.
    Never let reporting delay or fail the tool call.
 5. One process, one `agent_key`.
+6. Don't pass the PEP's own credentials to the tools it governs.
 
 ---
 

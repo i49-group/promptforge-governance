@@ -28,7 +28,7 @@ PromptForge does **not** send email, host chat, or call your CRM. It authors, ve
 
 | Term | Meaning |
 |------|---------|
-| **agent_key** | Stable ID shared with your platform (e.g. `penn`, `leo`). Used in APIs and Context tags. |
+| **agent_key** | Stable ID shared with your platform (e.g. `sales-agent`, `support-agent`). Used in APIs and Context tags. |
 | **AI Governance Profile** | One binder per agent: Talk + Act + distribution Activity. |
 | **Talk / content pack** | Assembled Context layers: `soul`, `principles`, `operational`, `knowledge`. |
 | **Act / policy bundle** | Signed rules for tools and tiers. Cached by a local PDP on the host that enforces decisions. |
@@ -80,9 +80,9 @@ Talk stubs are always created on create. JSON import preconfigures **Act** (and 
 
 | Field | Guidance |
 |-------|----------|
-| **agent_key** | Lowercase ID matching your platform (`leo`, not `Leo`). Cannot change later without a new profile. |
+| **agent_key** | Lowercase ID matching your platform (`support-agent`, not `Support-Agent`). Cannot change later without a new profile. |
 | **Display name** | Human label in the admin UI. (Also accepted from JSON on import.) |
-| **Digital worker email** | Optional identity email (e.g. `leo@agents.yourcompany.com`) carried on the pack. |
+| **Digital worker email** | Optional identity email (e.g. `support-agent@agents.yourcompany.com`) carried on the pack. |
 | **Target platform** | Operator note only (e.g. `acme_ops`) — stored for your team. |
 
 ### How to seed
@@ -117,7 +117,7 @@ Talk is edited in **Context Manager** (`/prompt-contexts`), not as a free-form b
 
 ### Tags (required)
 
-- Always include `agent:<agent_key>` (e.g. `agent:penn`).  
+- Always include `agent:<agent_key>` (e.g. `agent:sales-agent`).  
 - Optional environment scoping: `env:production` or `env:staging`. If any `env:*` tags exist on a layer, the pack request’s environment must match.
 
 ### Publishing Talk
@@ -156,7 +156,10 @@ The evaluator matches names exactly and nothing else. It does not turn
 `mcp__acme_crm__email_send_now` into `email.send_now`, and it does not fall back to a
 group guessed from the name. The older `tool_categories` block is no longer served or
 accepted; list each act instead. If an agent profile declares its enforcement points,
-PromptForge writes the host's exact spelling for you when it builds the bundle.
+PromptForge writes the host's exact spelling for you when it builds the bundle: name the
+provider's tool once (`email.send_now`, provider `acme_crm`) and each check gets the name
+it looks up. The [Implementer's Guide §5.5](./implementers-guide.md#55-name-each-action-once)
+explains how.
 
 ### Per-act fields
 

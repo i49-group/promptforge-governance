@@ -32,6 +32,61 @@ Talk (content pack) is soft. Act (signed bundle) is hard: cache →
 grace → **fail-closed deny**. If you only inject pack text, you have
 not enforced anything.
 
+### 1.1 The pieces and their names
+
+A tool call can be checked twice: once by the host before the call
+leaves it, and once by the provider before it does the work. Both
+checks read the same signed policy, and both can report what they
+decided.
+
+```mermaid
+flowchart LR
+  subgraph PF["PromptForge: the policy plane"]
+    POL["Policy<br/>one per agent, one entry per action"]
+    BUN["Signed bundle<br/>policy compiled to exact names"]
+    REC["Decision record<br/>and enforcement console"]
+  end
+  subgraph HOST["Host, e.g. Hermes"]
+    AG["Agent<br/>e.g. sales-agent"]
+    MOD["Model"]
+    CHK1["Host check<br/>the PromptForge plugin"]
+    LOC["Host-local tools<br/>terminal, read_file"]
+  end
+  subgraph PRV["Provider, e.g. a CRM"]
+    MCP["MCP server<br/>offers email.send_now, contacts.search"]
+    CHK2["Provider check"]
+    WORK["Does the work<br/>sends the email"]
+  end
+  POL --> BUN
+  BUN -- "fetched every few minutes" --> CHK1
+  BUN -- "fetched" --> CHK2
+  AG --> MOD
+  MOD -- "asks for mcp__crm__email_send_now" --> CHK1
+  CHK1 -- "allowed" --> LOC
+  CHK1 -- "allowed, sent as email.send_now" --> MCP
+  MCP --> CHK2 --> WORK
+  CHK1 -. "reports decisions" .-> REC
+  CHK2 -. "reports decisions" .-> REC
+```
+
+| Term | Meaning | Example |
+|---|---|---|
+| Agent | An AI worker with its own identity and policy | `sales-agent` |
+| Model | The language model that decides which tool to call | any LLM |
+| Host | The program that runs agents: holds the conversation, offers tools to the model, runs the calls | Hermes |
+| Tool | One action a model can ask for | send an email, run a terminal command |
+| Host-local tool | A tool the host implements itself. Its provider is `host` | `terminal`, `read_file` |
+| Provider | The system that owns a tool and does the actual work | a CRM; PromptForge itself (`get_context`) |
+| MCP server | How a provider offers its tools to hosts. The host connects to it as an MCP client, under a server name the host chooses | the CRM's MCP endpoint, connected as `crm` |
+| Naming convention | How a host spells a provider's tool when it offers it to the model | `email.send_now` offered as `mcp__crm__email_send_now` |
+| Enforcement point | A check that looks policy up: the host's, or a provider's own | the host plugin; the CRM's MCP-boundary check |
+| Policy | What an agent may do, per action, authored in PromptForge | `sales-agent` may call `email.send_now`, with approval |
+| Bundle | The signed copy of a policy that each check downloads, with every name spelled exactly as that check will look it up | `sales-agent`'s bundle, version 13 |
+| Decision | One check's answer to one tool call, reported to PromptForge | `deny`, reason `unknown_tool` |
+
+§5.5 explains how one policy entry becomes the exact name each check
+sees.
+
 ---
 
 ## 2. The enforcement-point contract
@@ -127,8 +182,8 @@ Do this once before you author a fleet.
    `publishNextVersion`
    (`scripts/governance/lib/policy-publish.ts`).
    Do not insert `status: 'published'` by hand. That skips the
-   act-inventory and alias guards. The pack still builds; the dead
-   name does nothing.
+   act-inventory and name-compile checks (§5.5). The pack still
+   builds; the dead name does nothing.
 4. Set `enforcement_expected`. Until you do, a missing PEP is not a
    fault.
 5. Confirm pack and bundle return 200 for that `agent_key` with the
@@ -210,16 +265,100 @@ unless presence is on a channel that cannot be switched off.
 - Judge residency by **role and span**. Short-lived CLI invocations
   load the plugin and fetch once; they are not extra gateways.
 
-### 5.5 Author the names the host actually sends
+### 5.5 Name each action once
 
-Write acts from the runtime's own tool registration. Gating a name
-the host has never sent (`process_manage` while the host sends
-`process`) is a control that never fires.
+Every check does **exact lookup and nothing else**. It takes the name
+it was handed, looks it up in the bundle, and treats a miss as
+`unknown_tool`. It never parses a name, guesses a group from it, or
+tries a second spelling. All the naming work happens in PromptForge,
+before the bundle is signed.
 
-Use **one spelling per act** — the name your runtime dispatches.
-The evaluator accepts aliases; carrying both spellings is how acts
-become unmatchable. A near-miss (wrong case, single underscores, a
-leading space) will not match and will not deny.
+**An action has one identity: its provider plus the tool name as the
+provider defines it.** `acme_crm` + `email.send_now`. Tools the host
+implements itself belong to the provider `host` (`host` +
+`terminal`). A policy entry is keyed by the provider's tool name and
+says who owns it:
+
+```json
+"email.send_now": { "provider": "acme_crm", "granted": true, "requires_approval": true },
+"terminal":       { "provider": "host",     "granted": true }
+```
+
+**The agent's profile declares its enforcement points**, meaning every
+check that will look this agent up:
+
+```json
+"enforcement_points": [
+  { "kind": "host", "convention": "mcp-client-prefix", "servers": { "acme_crm": "crm" } },
+  { "kind": "provider", "provider": "acme_crm" }
+]
+```
+
+- `kind: "host"` is the host's check. `convention` is how that host
+  spells provider tools:
+  - `native`: the provider's own name, unchanged.
+  - `mcp-client-prefix`: `mcp__{server}__{tool}`, with every
+    character outside `[A-Za-z0-9_]` replaced by `_`. Hermes, Claude
+    Code, Codex and OpenCode all do this.
+- `servers` maps each provider to the MCP server name **this host**
+  gave it in its own configuration. The provider doesn't choose that
+  name, and two hosts may choose differently. A provider missing
+  from `servers` is one this host doesn't connect to.
+- `kind: "provider"` is a provider checking calls to its own tools,
+  under its own names.
+
+**The bundle builder compiles each entry into every exact name those
+points will look up**, strips `provider`, and signs the result. For
+the profile above, `email.send_now` becomes two bundle keys:
+`mcp__crm__email_send_now` for the host check and `email.send_now`
+for the CRM's own check. Both carry the same answer. `terminal`
+compiles to `terminal`. Neither check needs to know the other
+exists.
+
+Rules that follow from this:
+
+- **Conventions run forward only.** `mcp-client-prefix` is lossy:
+  `email.send_now` and `email_send_now` produce the same name. So a
+  host name is never turned back into an action. If you want to know
+  what a host name means, look it up; don't parse it.
+- **A collision is refused, not resolved.** If two entries compile
+  to one name with different answers, publishing fails and names
+  both entries. If a later profile change causes one, the bundle
+  falls back to the names as authored.
+- **An entry no point will look up is reported as unreachable.**
+  Example: a provider tool on an agent whose host doesn't connect to
+  that provider. It grants nothing, so treat it as a mistake to fix,
+  not a rule in waiting.
+- **No points declared means no compiling.** Every entry compiles to
+  its own key, and an entry with no `provider` always does. In that
+  case, write the name exactly as the host sends it, from the host's
+  own tool registration, not from memory. Gating `process_manage`
+  while the host sends `process` is a control that never fires.
+- **One spelling per action.** Don't carry both
+  `mcp__crm__email_send_now` and `email.send_now` as separate
+  entries. Name the provider's tool once and declare the points. Two
+  entries for one action can disagree, and a near-miss (wrong case,
+  one underscore, a leading space) matches nothing and denies
+  nothing.
+- **A renamed tool is a new action.** If a provider renames
+  `email.get_campaigns` to `email.list_campaigns`, the old entry stops
+  matching and calls to the new name are `unknown_tool` until the
+  policy names it. Author the new name when the provider ships the
+  rename. Nothing in the chain maps old names to new ones. When
+  providers publish tool catalogs, a rename will be declared there as
+  versioned data, never inferred from the name.
+
+**If you are building a host check**, spell each tool exactly as
+your host offers it to the model, and look up that string. Tell the
+agent's profile which convention you use and what you named each
+server.
+
+**If you are building a provider check**, look up your own tool
+name, the one in your MCP `tools/list`, exactly as you define it.
+Ask for a `kind: "provider"` point on each agent you check. Don't
+strip a host's prefix to find your name. If a call arrives with a
+name you don't define, deny it; don't fall back to your own
+permissions.
 
 ### 5.6 Derive facets from arguments
 

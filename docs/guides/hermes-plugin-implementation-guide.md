@@ -45,7 +45,7 @@ hermes plugins list
 
 ### 2.2 PromptForge (per agent)
 
-For each `agent_key` (e.g. `penn`, `leo`):
+For each `agent_key` (e.g. `sales-agent`, `support-agent`):
 
 1. [AI Governance](https://www.mypromptforge.com/admin/ai-governance) → profile exists  
 2. Talk layers tagged `agent:<key>` (or stubs from New package)  
@@ -61,7 +61,7 @@ See [AI Governance Configuration Guide](./ai-governance-configuration-guide.md).
 | `PF_BASE_URL` | `https://www.mypromptforge.com` |
 | `PF_SERVICE_TOKEN` | Org service token (`pf_svc_…`) |
 | `PF_BUNDLE_VERIFY_KEY` | Same value as PromptForge `GOVERNANCE_BUNDLE_SIGNING_KEY` (trusted first-party HS256) |
-| `PF_AGENT_KEY` | Must match the Hermes profile’s agent (e.g. `penn`) |
+| `PF_AGENT_KEY` | Must match the Hermes profile’s agent (e.g. `sales-agent`) |
 | `PF_ENVIRONMENT` | Optional; default `production` |
 | `PF_INJECT_TALK` | Optional; default `true` — set `false` to skip Talk injection |
 | `PF_REFRESH_SECONDS` | Optional; default `300` — set `0` to disable background refresh |
@@ -110,7 +110,7 @@ If each agent profile (`~/.hermes/profiles/<agent>`) has its own config:
 
 1. Install the plugin once under `~/.hermes/plugins/promptforge-governance`  
 2. Enable it in **each** profile’s `config.yaml` that should be governed  
-3. Set **`PF_AGENT_KEY`** to that profile’s key (`penn`, `leo`, …) in that profile’s environment  
+3. Set **`PF_AGENT_KEY`** to that profile’s key (`sales-agent`, `support-agent`, …) in that profile’s environment  
 
 ```yaml
 # ~/.hermes/config.yaml  (or profile-specific config)

@@ -280,6 +280,16 @@ in the way is a text match on the command.
    gateway process. A tool subprocess that inherits them, or a secrets
    file the agent's shell can `cat`, lets the agent act as its own
    enforcement point: fetch bundles, post decisions.
+
+   A host's own scrub list usually won't name them. Hermes strips
+   its provider and messaging keys from the environment it gives
+   `terminal` and `execute_code`, but not `PF_*`, so a plain `env`
+   would print them — and `env` names no secret, so no facet fires.
+   This kit's plugin removes `PF_SERVICE_TOKEN` and
+   `PF_BUNDLE_VERIFY_KEY` from the process environment once it holds
+   them, and again before every tool call, because Hermes re-reads
+   the profile `.env` more than once per process. A PEP of your own
+   owes the same (§6).
 3. **Job scripts load their own keys, by name.** A script that needs
    an upload key reads *that key* from the agent's secrets file and
    ignores the rest. The command the agent runs then names no secret

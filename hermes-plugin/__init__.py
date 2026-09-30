@@ -182,6 +182,27 @@ def _get_pdp() -> GovernancePdp:
         return _pdp
 
 
+# The PEP's own secrets. Hermes scrubs its provider and messaging keys from the environment it
+# gives `terminal` and `execute_code`, but not these, so a plain `env` in a governed shell would
+# print the service token and the bundle verify key. Neither command names a secret, so no facet
+# fires. Once the PDP holds them, the process environment has no further use for them.
+_SECRET_ENV = ("PF_SERVICE_TOKEN", "PF_BUNDLE_VERIFY_KEY")
+
+
+def _seal_secret_env() -> None:
+    """Remove the PEP's secrets from the process environment, once they are captured.
+
+    Called at registration and again before every tool call: Hermes re-reads the profile `.env`
+    into the environment more than once per process (after plugin discovery, on hot reload, on MCP
+    config reload), and each pass puts them back. Sealing just before the tool runs is what keeps
+    them out of the subprocess it spawns.
+    """
+    if _pdp is None:
+        return
+    for name in _SECRET_ENV:
+        os.environ.pop(name, None)
+
+
 def _mark_ready(meta: dict) -> None:
     global _governance_ready, _last_setup_error, _warned_user
     _governance_ready = True
@@ -289,6 +310,7 @@ def pre_tool_call(
 
     try:
         pdp = _get_pdp()
+        _seal_secret_env()
         if pdp.bundle is None:
             try:
                 meta = pdp.refresh()
@@ -513,6 +535,13 @@ def register(ctx: Any) -> None:
         "Registered promptforge-governance hooks (agent_key=%s)",
         os.environ.get("PF_AGENT_KEY", "?"),
     )
+    # Capture credentials now so they can leave the environment before any tool runs. Missing
+    # ones are not an error here: the first tool call fails closed and says why.
+    try:
+        _get_pdp()
+    except PdpError:
+        pass
+    _seal_secret_env()
     # Heartbeat from load, not from first session. Previously the loop started inside
     # on_session_start, so an idle agent never contacted PromptForge at all — which makes "governed
     # and quiet" and "not governed" the same observation from our side, the very confusion P-121

@@ -48,9 +48,9 @@ checks read the same signed policy, answer each call with allow, ask
 
 ![How PromptForge governs a tool call: the Talk pack goes into the model's prompt context as guidance; the signed Act bundle is fetched by the host check and the provider check, which answer each call with allow, ask or deny and report their decisions back to PromptForge.](../images/governance-ecosystem.svg)
 
-The provider's 10-minute refresh is one relying party's default; a
-provider check re-fetches whenever its copy is older than its own
-interval.
+Each check's refresh interval is configurable. A provider check
+re-fetches when its copy is older than that interval, for example
+every 10 minutes.
 
 | Term | Meaning | Example |
 |---|---|---|

@@ -160,6 +160,17 @@ def block_policy(
                 f"Remove `{preapproved[0]}` from this host's command_allowlist in config.yaml, "
                 "then restart its gateway.",
             )
+        elif "host_yolo_refused" in reason_l:
+            title = (
+                f"`{tool_name}` needs an administrator's approval under PromptForge policy, but this "
+                "session is in yolo mode, which would let it through without that approval, so it "
+                "was not sent to the host's prompt. It did not run."
+            )
+            steps.insert(
+                0,
+                "Turn yolo mode off for this session (send /yolo again), or restart a CLI session "
+                "without --yolo.",
+            )
     elif any("unknown_tool" in r for r in reason_l):
         title = (
             f"`{tool_name}` is not in the published Act inventory for `{agent_key}`. It did not run."

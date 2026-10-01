@@ -15,6 +15,8 @@ through an act policy refuses outright is privilege escalation, which is a separ
 mechanism with its own binding and expiry.
 
 post_tool_call reports back to PromptForge, opt-in per agent via `report_decisions`.
+The gateway also reports the permissions Hermes keeps outside the policy (see
+`host_permissions.py`).
 Decisions are reported at the point they are made; an escalated act is additionally
 reported once it has actually run, which is the only evidence available here that a
 human approved it.
@@ -34,12 +36,14 @@ try:
     from . import pdp as pdp_mod
     from . import messages as msg
     from .reporter import DecisionReporter
+    from .host_permissions import HostPermissionsReporter
 except ImportError:  # loaded as flat plugin directory on sys.path
     from pdp import GovernancePdp, PdpError  # type: ignore
     import build  # type: ignore
     import pdp as pdp_mod  # type: ignore
     import messages as msg  # type: ignore
     from reporter import DecisionReporter  # type: ignore
+    from host_permissions import HostPermissionsReporter  # type: ignore
 
 logger = logging.getLogger("promptforge.governance")
 
@@ -92,6 +96,27 @@ def _get_reporter(pdp: GovernancePdp) -> DecisionReporter:
                 environment=pdp.environment,
             )
         return _reporter
+
+
+_host_reporter: Optional[HostPermissionsReporter] = None
+
+
+def _check_host_permissions(pdp: GovernancePdp) -> None:
+    """Called from the refresh thread after each successful refresh. Never raises."""
+    global _host_reporter
+    if build.runtime_role() != build.ROLE_GATEWAY:
+        return
+    try:
+        if _host_reporter is None:
+            _host_reporter = HostPermissionsReporter(
+                base_url=pdp.base_url,
+                token=pdp.token,
+                agent_key=pdp.agent_key,
+                environment=pdp.environment,
+            )
+        _host_reporter.check()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("PromptForge host-permissions check skipped: %s", exc)
 
 
 def _reporting_enabled(pdp: GovernancePdp) -> bool:
@@ -234,6 +259,7 @@ def _refresh_loop(interval_s: float) -> None:
         try:
             meta = _get_pdp().refresh()
             _mark_ready(meta)
+            _check_host_permissions(_get_pdp())
         except Exception as exc:  # noqa: BLE001 — never crash Hermes
             _mark_not_ready(exc)
             logger.warning("PromptForge refresh failed: %s", exc)

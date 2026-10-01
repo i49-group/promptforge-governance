@@ -445,6 +445,56 @@ in the way is a text match on the command.
 - The job command derives no `credential` facet and runs under the
   plain shell grant.
 
+### 5.11 Report what the host grants on its own
+
+Most hosts can grant permissions outside your policy. Hermes asks
+before a dangerous command, and an answer of "always" in a chat
+becomes a permanent entry in the profile's `command_allowlist`. From
+then on that command, or every command that program runs, skips the
+question, and nothing in the signed bundle says so.
+
+A host that keeps standing grants of its own SHOULD report them, so
+they appear next to the policy instead of only in a config file.
+Send one snapshot per agent to `POST /api/governance/host-permissions`
+with the agent's service token:
+
+```json
+{
+  "schema": 1,
+  "agent_key": "ops-agent",
+  "environment": "production",
+  "harness": "hermes",
+  "observed_at": "2026-10-01T12:00:00Z",
+  "approval_mode": "smart",
+  "unattended_modes": { "cron_mode": "deny" },
+  "permanent_approvals": [
+    { "key": "/usr/bin/python3", "kind": "binary" },
+    { "key": "script execution via -e/-c flag", "kind": "pattern" },
+    { "key": "=command:3f2a9c", "kind": "command_hash" },
+    { "key": "plugin_rule:example-plugin:network", "kind": "rule" }
+  ],
+  "deny_rules": ["rm -rf /*"]
+}
+```
+
+- `kind` is `binary` (a program path), `pattern` (a detector or
+  pattern name), `command_hash` (one exact command, already hashed)
+  or `rule` (a rule another plugin registered).
+- **Never send a secret.** Send an entry in clear only if it has no
+  token shape and the host's own redaction leaves it unchanged;
+  otherwise send a hash of it. PromptForge hashes token-shaped keys
+  again on arrival.
+- Send at start, whenever the snapshot changes, and at least every
+  6 hours. PromptForge flags a gateway on a reporting build that has
+  not reported for a day.
+- Report from the gateway only, and never on the tool-call path: a
+  slow or failed post must not delay or fail a call.
+- The response is fail-soft: `200` with `accepted: false` means the
+  write failed, so try again on the next check.
+
+The report is read-only. PromptForge shows it and does not change it;
+removing a grant is still done on the host.
+
 ---
 
 ## 6. Writing a PEP of your own
@@ -465,6 +515,7 @@ Minimum:
    Never let reporting delay or fail the tool call.
 5. One process, one `agent_key`.
 6. Don't pass the PEP's own credentials to the tools it governs.
+7. If the host keeps standing grants of its own, report them (§5.11).
 
 ---
 

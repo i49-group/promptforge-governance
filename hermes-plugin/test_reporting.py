@@ -49,7 +49,7 @@ class ExplodingReporter:
 
 class FakePdp:
     def __init__(self, decision: str, *, report_decisions=None, inline_approval=None):
-        self.agent_key = "alex"
+        self.agent_key = "ops-agent"
         self.base_url = "https://pf.test"
         self.token = "tok"
         self.environment = "production"
@@ -108,7 +108,7 @@ class ReportingOptInTests(unittest.TestCase):
         self.assertEqual(len(self.sink.calls), 1)
         self.assertEqual(self.sink.calls[0]["decision"], "allow")
         self.assertEqual(self.sink.calls[0]["tool_name"], "email.send_now")
-        self.assertEqual(self.sink.calls[0]["agent_key"], "alex")
+        self.assertEqual(self.sink.calls[0]["agent_key"], "ops-agent")
 
     def test_deny_is_reported_as_deny(self):
         self._run(FakePdp("deny", report_decisions=True))

@@ -41,14 +41,14 @@ class PdpTests(unittest.TestCase):
         self.assertIs(resolve_tool_policy(payload, "calendar.get_events"), granted)
         self.assertIsNone(resolve_tool_policy(payload, "calendar.list_events"))
         self.assertIsNone(
-            resolve_tool_policy(payload, "mcp__brilliant_central__calendar_get_events")
+            resolve_tool_policy(payload, "mcp__crm__calendar_get_events")
         )
 
     def test_evaluate_allow_deny(self) -> None:
         now = datetime.now(timezone.utc)
         payload = {
             "org_id": "o",
-            "agent_key": "penn",
+            "agent_key": "sales-agent",
             "environment": "production",
             "version": "v1",
             "etag": "e",
@@ -69,7 +69,7 @@ class PdpTests(unittest.TestCase):
             base_url="https://example.test",
             token="t",
             verify_key=SECRET,
-            agent_key="penn",
+            agent_key="sales-agent",
         )
         pdp.bundle = {
             "alg": "HS256",

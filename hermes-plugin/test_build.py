@@ -136,7 +136,7 @@ class RuntimeRole(unittest.TestCase):
 
     def test_a_gateway_is_a_gateway(self) -> None:
         self.assertEqual(
-            self._role(["hermes", "--profile", "alex", "gateway", "run"]), build_mod.ROLE_GATEWAY
+            self._role(["hermes", "--profile", "ops-agent", "gateway", "run"]), build_mod.ROLE_GATEWAY
         )
 
     def test_a_bare_session_is_interactive(self) -> None:
@@ -144,7 +144,7 @@ class RuntimeRole(unittest.TestCase):
 
     def test_a_session_with_only_flags_is_interactive(self) -> None:
         self.assertEqual(
-            self._role(["hermes", "--profile", "alex"]), build_mod.ROLE_INTERACTIVE
+            self._role(["hermes", "--profile", "ops-agent"]), build_mod.ROLE_INTERACTIVE
         )
 
     def test_the_dashboard_is_the_dashboard(self) -> None:
@@ -190,7 +190,7 @@ class InstanceIdentity(unittest.TestCase):
     """The instance id is what makes a second enforcement point visible.
 
     Two processes on the same build send the same BUILD, so the unsupervised gateway that held
-    zander's identity for six days (P-128) was only detectable because it was *stale*. One running
+    one agent's identity for six days (P-128) was only detectable because it was *stale*. One running
     current code would have been invisible. The id must therefore be per-process, and must not be
     derived from anything the two processes share.
     """
@@ -335,7 +335,7 @@ class HeartbeatIsIndependentOfSessions(unittest.TestCase):
         self.assertIn("pre_tool_call", hooks)
 
     def test_a_gateway_heartbeats(self) -> None:
-        beats, _ = self._register_with_argv(["hermes", "--profile", "alex", "gateway", "run"])
+        beats, _ = self._register_with_argv(["hermes", "--profile", "ops-agent", "gateway", "run"])
         self.assertTrue(beats)
 
     def test_a_bare_interactive_session_heartbeats(self) -> None:

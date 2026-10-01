@@ -163,6 +163,7 @@ export function createHermesGovernancePlugin(
               decision: 'deny',
               tier: 'control',
               requires_approval: true,
+              category: null,
               reasons: ['missing_tool_name'],
               bundle_version: pdp.getBundleMeta()?.version || 'none',
               correlation_id: ctx.correlation_id || 'missing-tool',

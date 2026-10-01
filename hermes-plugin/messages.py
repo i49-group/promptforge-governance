@@ -148,6 +148,18 @@ def block_policy(
             f"If `{tool_name}` should run without approval, set requires_approval=false → Publish.",
             "The host picks up the published change within a few minutes.",
         ]
+        preapproved = [r.split(":", 1)[1] for r in reasons if r.startswith("host_preapproved:")]
+        if preapproved:
+            title = (
+                f"`{tool_name}` needs an administrator's approval under PromptForge policy, but this "
+                f"host's allowlist holds `{preapproved[0]}`, which would let it through without that "
+                "approval, so it was not sent to the host's prompt. It did not run."
+            )
+            steps.insert(
+                0,
+                f"Remove `{preapproved[0]}` from this host's command_allowlist in config.yaml, "
+                "then restart its gateway.",
+            )
     elif any("unknown_tool" in r for r in reason_l):
         title = (
             f"`{tool_name}` is not in the published Act inventory for `{agent_key}`. It did not run."

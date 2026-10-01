@@ -68,8 +68,12 @@ tightens on its own schedule.
 
 from __future__ import annotations
 
+import logging
 import re
+import weakref
 from typing import Dict, List, Optional, Sequence, Tuple
+
+logger = logging.getLogger("promptforge.governance")
 
 # Facets, tightest-consequence first. Order here is documentation only; the decision
 # combines every applicable facet rather than picking one.
@@ -99,10 +103,17 @@ FACET_FLAGGED = "flagged"
 FLAGGED_ACTS = ("terminal",)
 FLAGGED_NOTE_PREFIX = "flagged:"
 DETECTOR_UNAVAILABLE = "detector_unavailable"
+DETECTOR_SELFTEST_FAILED = "detector_selftest_failed"
 _FLAGGED_DESCRIPTION_MAX = 80
+# Known answers the detector must give before its verdicts are used. A Hermes upgrade can keep
+# `detect_dangerous_command` importable and still change or empty its patterns; without this the
+# facet would quietly stop flagging and a policy denying `terminal.flagged` would stop denying.
+_DETECTOR_MUST_FLAG = ("rm -rf /", "git push --force origin main")
+_DETECTOR_MUST_NOT_FLAG = ("ls -la",)
+_detector_status: "weakref.WeakKeyDictionary" = weakref.WeakKeyDictionary()
 # Notes that describe the call rather than explain why narrowing did not apply. They travel into the
 # decision whether or not a facet is listed, and never stand in for `derived_unlisted`.
-INFORMATIONAL_NOTE_PREFIXES = (FLAGGED_NOTE_PREFIX, DETECTOR_UNAVAILABLE)
+INFORMATIONAL_NOTE_PREFIXES = (FLAGGED_NOTE_PREFIX, DETECTOR_UNAVAILABLE, DETECTOR_SELFTEST_FAILED)
 
 
 def is_informational_note(note: str) -> bool:
@@ -372,21 +383,52 @@ def _path_facets(text: str, agent_key: Optional[str]) -> List[str]:
     return facets
 
 
+def _detector_self_test(detect) -> Optional[str]:
+    """None when the detector gives the known answers, else the note to record. Once per detector."""
+    try:
+        return _detector_status[detect]
+    except (KeyError, TypeError):
+        pass
+    try:
+        ok = all(bool(detect(c)[0]) for c in _DETECTOR_MUST_FLAG) and not any(
+            bool(detect(c)[0]) for c in _DETECTOR_MUST_NOT_FLAG
+        )
+        status = None if ok else DETECTOR_SELFTEST_FAILED
+    except Exception:  # noqa: BLE001 — a detector fault must not fail the call's evaluation
+        status = DETECTOR_UNAVAILABLE
+    if status:
+        logger.warning(
+            "PromptForge governance: Hermes's dangerous-command detector failed its self-test (%s); "
+            "terminal.flagged will not be derived",
+            status,
+        )
+    try:
+        _detector_status[detect] = status
+    except TypeError:
+        pass
+    return status
+
+
 def _host_flag(command: str) -> Tuple[Optional[bool], Optional[str]]:
-    """(flagged, description) from Hermes's own detector, or (None, None) when it cannot be read.
+    """(flagged, label) from Hermes's own detector, or (None, note) when its verdict cannot be used.
 
     Run on the raw command, not the prose-suppressed one: the facet stands for "Hermes would ask
-    about this", so it must match exactly what Hermes matches. The description is the detector's
-    pattern label, never command text, and is what the would-deny review groups by.
+    about this", so it must match exactly what Hermes matches. The label is the detector's pattern
+    label, never command text, and is what the would-deny review groups by. The note is
+    `detector_unavailable` when it cannot be imported or called, and `detector_selftest_failed`
+    when it answers the known probes wrongly.
     """
     try:
         from tools.approval_detection import detect_dangerous_command  # type: ignore
     except Exception:  # noqa: BLE001 — not running inside Hermes, or its internals moved
-        return None, None
+        return None, DETECTOR_UNAVAILABLE
+    failed = _detector_self_test(detect_dangerous_command)
+    if failed:
+        return None, failed
     try:
         flagged, _key, description = detect_dangerous_command(command)
     except Exception:  # noqa: BLE001 — a detector fault must not fail the call's evaluation
-        return None, None
+        return None, DETECTOR_UNAVAILABLE
     label = " ".join(str(description or "unspecified").split())[:_FLAGGED_DESCRIPTION_MAX]
     return bool(flagged), label
 
@@ -440,7 +482,7 @@ def derive_facets(
         if base in FLAGGED_ACTS:
             flagged, description = _host_flag(command)
             if flagged is None:
-                notes.append(DETECTOR_UNAVAILABLE)
+                notes.append(description or DETECTOR_UNAVAILABLE)
             elif flagged:
                 facets.append(FACET_FLAGGED)
                 notes.append(FLAGGED_NOTE_PREFIX + description)

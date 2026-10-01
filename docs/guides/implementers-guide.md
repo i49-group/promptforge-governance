@@ -34,40 +34,23 @@ not enforced anything.
 
 ### 1.1 The pieces and their names
 
+PromptForge publishes two things for each agent. **Talk** is what the
+agent is told: it goes into the model's prompt context, so it shapes
+behaviour but cannot guarantee it. **Act** is what the agent may do: a
+signed policy that checks outside the model enforce, giving the same
+answer to the same call every time. Put anything that must hold in
+Act.
+
 A tool call can be checked twice: once by the host before the call
 leaves it, and once by the provider before it does the work. Both
-checks read the same signed policy, and both can report what they
-decided.
+checks read the same signed policy, answer each call with allow, ask
+(a person approves first) or deny, and can report what they decided.
 
-```mermaid
-flowchart LR
-  subgraph PF["PromptForge: the policy plane"]
-    POL["Policy<br/>one per agent, one entry per action"]
-    BUN["Signed bundle<br/>policy compiled to exact names"]
-    REC["Decision record<br/>and enforcement console"]
-  end
-  subgraph HOST["Host, e.g. Hermes"]
-    AG["Agent<br/>e.g. sales-agent"]
-    MOD["Model"]
-    CHK1["Host check<br/>the PromptForge plugin"]
-    LOC["Host-local tools<br/>terminal, read_file"]
-  end
-  subgraph PRV["Provider, e.g. a CRM"]
-    MCP["MCP server<br/>offers email.send_now, contacts.search"]
-    CHK2["Provider check"]
-    WORK["Does the work<br/>sends the email"]
-  end
-  POL --> BUN
-  BUN -- "fetched every few minutes" --> CHK1
-  BUN -- "fetched" --> CHK2
-  AG --> MOD
-  MOD -- "asks for mcp__crm__email_send_now" --> CHK1
-  CHK1 -- "allowed" --> LOC
-  CHK1 -- "allowed, sent as email.send_now" --> MCP
-  MCP --> CHK2 --> WORK
-  CHK1 -. "reports decisions" .-> REC
-  CHK2 -. "reports decisions" .-> REC
-```
+![How PromptForge governs a tool call: the Talk pack goes into the model's prompt context as guidance; the signed Act bundle is fetched by the host check and the provider check, which answer each call with allow, ask or deny and report their decisions back to PromptForge.](../images/governance-ecosystem.svg)
+
+The provider's 10-minute refresh is one relying party's default; a
+provider check re-fetches whenever its copy is older than its own
+interval.
 
 | Term | Meaning | Example |
 |---|---|---|
@@ -80,9 +63,11 @@ flowchart LR
 | MCP server | How a provider offers its tools to hosts. The host connects to it as an MCP client, under a server name the host chooses | the CRM's MCP endpoint, connected as `crm` |
 | Naming convention | How a host spells a provider's tool when it offers it to the model | `email.send_now` offered as `mcp__crm__email_send_now` |
 | Enforcement point | A check that looks policy up: the host's, or a provider's own | the host plugin; the CRM's MCP-boundary check |
+| Talk pack | What the agent is told (identity, principles, operating rules). It goes into the model's prompt context; nothing enforces it | "Always confirm before emailing a customer" |
+| Act | What the agent may do: the policy and its signed bundle, enforced by checks outside the model | the rules that let `sales-agent` call `email.send_now` |
 | Policy | What an agent may do, per action, authored in PromptForge | `sales-agent` may call `email.send_now`, with approval |
 | Bundle | The signed copy of a policy that each check downloads, with every name spelled exactly as that check will look it up | `sales-agent`'s bundle, version 13 |
-| Decision | One check's answer to one tool call, reported to PromptForge | `deny`, reason `unknown_tool` |
+| Decision | One check's answer to one tool call: allow, ask (`require_approval`) or deny, reported to PromptForge | `deny`, reason `unknown_tool` |
 
 §5.5 explains how one policy entry becomes the exact name each check
 sees.

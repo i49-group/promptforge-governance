@@ -19,7 +19,7 @@ function makePayload(
   const now = Date.now();
   return {
     org_id: 'org-1',
-    agent_key: 'penn',
+    agent_key: 'sales-agent',
     environment: 'staging',
     version: '2026.07.19.test',
     etag: 'W/"bundle-test"',
@@ -69,7 +69,7 @@ function makeBundle(
 
 function makePack(): GovernanceContentPack {
   return {
-    agent_key: 'penn',
+    agent_key: 'sales-agent',
     environment: 'staging',
     version: 'pack-v1',
     etag: 'W/"pack"',
@@ -107,7 +107,7 @@ describe('evaluateAgainstBundle', () => {
     const bundle = makeBundle();
     const result = evaluateAgainstBundle(
       bundle,
-      { agent_key: 'penn', tool_name: 'calendar.get_events' },
+      { agent_key: 'sales-agent', tool_name: 'calendar.get_events' },
       'normal'
     );
     // tool=velocity, default=efficiency → effective efficiency; still no approval required
@@ -120,7 +120,7 @@ describe('evaluateAgainstBundle', () => {
     const bundle = makeBundle();
     const result = evaluateAgainstBundle(
       bundle,
-      { agent_key: 'penn', tool_name: 'email.schedule_campaign' },
+      { agent_key: 'sales-agent', tool_name: 'email.schedule_campaign' },
       'normal'
     );
     expect(result.decision).toBe('require_approval');
@@ -131,7 +131,7 @@ describe('evaluateAgainstBundle', () => {
     const bundle = makeBundle();
     const result = evaluateAgainstBundle(
       bundle,
-      { agent_key: 'penn', tool_name: 'email.send_now' },
+      { agent_key: 'sales-agent', tool_name: 'email.send_now' },
       'normal'
     );
     expect(result.decision).toBe('require_approval');
@@ -142,7 +142,7 @@ describe('evaluateAgainstBundle', () => {
     const bundle = makeBundle();
     const result = evaluateAgainstBundle(
       bundle,
-      { agent_key: 'penn', tool_name: 'totally.unknown' },
+      { agent_key: 'sales-agent', tool_name: 'totally.unknown' },
       'normal'
     );
     expect(result.decision).toBe('deny');
@@ -153,7 +153,7 @@ describe('evaluateAgainstBundle', () => {
     const bundle = makeBundle();
     const result = evaluateAgainstBundle(
       bundle,
-      { agent_key: 'penn', tool_name: 'contacts.delete' },
+      { agent_key: 'sales-agent', tool_name: 'contacts.delete' },
       'normal'
     );
     expect(result.decision).toBe('deny');
@@ -164,7 +164,7 @@ describe('evaluateAgainstBundle', () => {
     const bundle = makeBundle();
     const result = evaluateAgainstBundle(
       bundle,
-      { agent_key: 'penn', tool_name: 'calendar.get_events' },
+      { agent_key: 'sales-agent', tool_name: 'calendar.get_events' },
       'fail_closed'
     );
     expect(result.decision).toBe('deny');
@@ -223,7 +223,7 @@ describe('createGovernancePdp', () => {
     const pdp = createGovernancePdp({
       baseUrl: 'https://example.com',
       token: 'tok',
-      agentKey: 'penn',
+      agentKey: 'sales-agent',
       environment: 'staging',
       verifyKey: SECRET,
       fetchImpl: fetchImpl as unknown as typeof fetch,
@@ -234,7 +234,7 @@ describe('createGovernancePdp', () => {
     expect(refreshed.state).toBe('normal');
 
     const result = pdp.evaluate({
-      agent_key: 'penn',
+      agent_key: 'sales-agent',
       tool_name: 'calendar.get_events',
     });
     expect(result.decision).toBe('allow');
@@ -261,7 +261,7 @@ describe('createGovernancePdp', () => {
     const pdp = createGovernancePdp({
       baseUrl: 'https://example.com',
       token: 'tok',
-      agentKey: 'penn',
+      agentKey: 'sales-agent',
       verifyKey: SECRET,
       fetchImpl: fetchImpl as unknown as typeof fetch,
     });
@@ -304,14 +304,14 @@ describe('createGovernancePdp', () => {
     const pdp = createGovernancePdp({
       baseUrl: 'https://example.com',
       token: 'tok',
-      agentKey: 'penn',
+      agentKey: 'sales-agent',
       verifyKey: SECRET,
       fetchImpl: fetchImpl as unknown as typeof fetch,
       now: () => clock,
     });
 
     await pdp.refresh();
-    expect(pdp.evaluate({ agent_key: 'penn', tool_name: 'calendar.get_events' }).decision).toBe(
+    expect(pdp.evaluate({ agent_key: 'sales-agent', tool_name: 'calendar.get_events' }).decision).toBe(
       'allow'
     );
 
@@ -322,7 +322,7 @@ describe('createGovernancePdp', () => {
     // Past grace → fail_closed deny
     clock += 20_000;
     const denied = pdp.evaluate({
-      agent_key: 'penn',
+      agent_key: 'sales-agent',
       tool_name: 'calendar.get_events',
     });
     expect(denied.decision).toBe('deny');

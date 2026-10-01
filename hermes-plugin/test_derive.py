@@ -361,12 +361,12 @@ class MultiplexerSelector(unittest.TestCase):
             self.assertEqual(notes, [])
 
     def test_kill_can_be_gated_while_wait_stays_free(self) -> None:
-        # The control Glen asked for, and the reason the coarse gate had to be reverted: gating
+        # The control the operator asked for, and the reason the coarse gate had to be reverted: gating
         # the act name charged an approval for 97.6% of calls.
         tools = {"process": OPEN, "process.kill": GATED}
-        wait = evaluate_derived(policy(tools), "process", {"action": "wait"}, "zander", None, "c1")
+        wait = evaluate_derived(policy(tools), "process", {"action": "wait"}, "research-agent", None, "c1")
         self.assertEqual(wait["decision"], "allow")
-        kill = evaluate_derived(policy(tools), "process", {"action": "kill"}, "zander", None, "c2")
+        kill = evaluate_derived(policy(tools), "process", {"action": "kill"}, "research-agent", None, "c2")
         self.assertEqual(kill["decision"], "require_approval")
         self.assertIn("derived_act:process.kill", kill["reasons"])
 
@@ -376,7 +376,7 @@ class MultiplexerSelector(unittest.TestCase):
         tools = {"process": OPEN}
         for action in ("wait", "poll", "kill", "log", "list"):
             result = evaluate_derived(
-                policy(tools), "process", {"action": action}, "zander", None, "c"
+                policy(tools), "process", {"action": action}, "research-agent", None, "c"
             )
             self.assertEqual(result["decision"], "allow", action)
             self.assertIn("derived_unlisted:process." + action, result["reasons"])
@@ -439,7 +439,7 @@ class ProcessFacetGrain(unittest.TestCase):
         # explicit edit — drop the coarse entry, list the sub-facets — and is never automatic.
         tools = {"terminal": OPEN, "terminal.process": GATED}
         result = evaluate_derived(
-            policy(tools), "terminal", {"command": "launchctl print gui/501/x"}, "zander", None, "c"
+            policy(tools), "terminal", {"command": "launchctl print gui/501/x"}, "research-agent", None, "c"
         )
         self.assertEqual(result["decision"], "require_approval")
         self.assertIn("derived_act:terminal.process", result["reasons"])
@@ -447,7 +447,7 @@ class ProcessFacetGrain(unittest.TestCase):
     def test_sub_facets_let_reads_run_while_mutations_gate(self) -> None:
         tools = {"terminal": OPEN, "terminal.process.mutate": GATED}
         read = evaluate_derived(
-            policy(tools), "terminal", {"command": "launchctl print gui/501/x"}, "zander", None, "c"
+            policy(tools), "terminal", {"command": "launchctl print gui/501/x"}, "research-agent", None, "c"
         )
         self.assertEqual(read["decision"], "allow")
         mutate = evaluate_derived(

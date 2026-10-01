@@ -11,7 +11,7 @@ class MessageTests(unittest.TestCase):
     def test_setup_not_found_has_admin_steps(self) -> None:
         text = msg.block_setup(
             tool_name="calendar.get_events",
-            agent_key="penn",
+            agent_key="sales-agent",
             exc="HTTP 404: not found",
         )
         self.assertIn("TOOL BLOCKED BY PROMPTFORGE", text)
@@ -22,7 +22,7 @@ class MessageTests(unittest.TestCase):
     def test_setup_auth(self) -> None:
         text = msg.block_setup(
             tool_name="x",
-            agent_key="leo",
+            agent_key="support-agent",
             exc="HTTP 401: Unauthorized",
         )
         self.assertIn("credentials", text.lower())
@@ -31,7 +31,7 @@ class MessageTests(unittest.TestCase):
     def test_unknown_tool_policy(self) -> None:
         text = msg.block_policy(
             tool_name="email.send",
-            agent_key="penn",
+            agent_key="sales-agent",
             decision="deny",
             reasons=["unknown_tool", "tool:email.send"],
             bundle_version="v1",
@@ -43,7 +43,7 @@ class MessageTests(unittest.TestCase):
 
     def test_session_not_ready(self) -> None:
         text = msg.session_not_ready_context(
-            agent_key="penn", error="HTTP 404"
+            agent_key="sales-agent", error="HTTP 404"
         )
         self.assertIn("NOT READY", text)
         self.assertIn("tools will not run", text)

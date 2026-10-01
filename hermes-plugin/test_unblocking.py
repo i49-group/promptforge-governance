@@ -19,7 +19,7 @@ def _pdp_with_expiry(expires_at: str) -> GovernancePdp:
         base_url="https://example.test",
         token="t",
         verify_key="k",
-        agent_key="alex",
+        agent_key="ops-agent",
     )
     p.bundle = {"payload": {"expires_at": expires_at, "version": "v1"}}
     return p
@@ -56,7 +56,7 @@ class BundleRenewalTests(unittest.TestCase):
 
     def test_no_bundle_needs_full_copy(self):
         p = GovernancePdp(
-            base_url="https://example.test", token="t", verify_key="k", agent_key="alex"
+            base_url="https://example.test", token="t", verify_key="k", agent_key="ops-agent"
         )
         self.assertTrue(p._bundle_needs_renewal())
 
@@ -79,7 +79,7 @@ class BundleRenewalTests(unittest.TestCase):
 class ConditionalRequestTests(unittest.TestCase):
     def test_no_etag_cached_sends_no_conditional_header(self):
         p = GovernancePdp(
-            base_url="https://example.test", token="t", verify_key="k", agent_key="alex"
+            base_url="https://example.test", token="t", verify_key="k", agent_key="ops-agent"
         )
         captured = {}
 
@@ -93,16 +93,16 @@ class ConditionalRequestTests(unittest.TestCase):
         urllib.request.urlopen = fake_urlopen
         try:
             with self.assertRaises(Exception):
-                p._fetch_json("/api/governance/bundles/alex")
+                p._fetch_json("/api/governance/bundles/ops-agent")
         finally:
             urllib.request.urlopen = original
         self.assertNotIn("If-none-match", captured["headers"])
 
     def test_cached_etag_is_sent_and_suppressed_when_disallowed(self):
         p = GovernancePdp(
-            base_url="https://example.test", token="t", verify_key="k", agent_key="alex"
+            base_url="https://example.test", token="t", verify_key="k", agent_key="ops-agent"
         )
-        path = "/api/governance/bundles/alex"
+        path = "/api/governance/bundles/ops-agent"
         p._etags[path] = 'W/"bundle-example-production-v1"'
         captured = {}
 

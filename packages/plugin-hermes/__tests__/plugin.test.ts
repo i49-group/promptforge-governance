@@ -12,7 +12,7 @@ function makeBundle(
 ): SignedPolicyBundle {
   const payload = {
     org_id: 'org_test',
-    agent_key: 'penn',
+    agent_key: 'sales-agent',
     environment: 'production' as const,
     version: 'vtest',
     etag: 'W/"vtest"',
@@ -34,7 +34,7 @@ function makeBundle(
 
 function mockFetch(bundle: SignedPolicyBundle): typeof fetch {
   const pack = {
-    agent_key: 'penn',
+    agent_key: 'sales-agent',
     environment: 'production',
     version: 'pack1',
     etag: 'W/"pack1"',
@@ -45,9 +45,9 @@ function mockFetch(bundle: SignedPolicyBundle): typeof fetch {
         id: '1',
         name: 'soul',
         context_type: 'soul',
-        content: '# Penn',
+        content: '# Sales Agent',
         content_hash: 'abc',
-        tags: ['agent:penn'],
+        tags: ['agent:sales-agent'],
       },
     ],
     prompts: [],
@@ -85,7 +85,7 @@ describe('createHermesGovernancePlugin', () => {
       baseUrl: 'https://example.test',
       token: 'tok',
       verifyKey: SECRET,
-      agentKey: 'penn',
+      agentKey: 'sales-agent',
       refreshIntervalMs: 0,
       fetchImpl: mockFetch(bundle),
     });
@@ -108,7 +108,7 @@ describe('createHermesGovernancePlugin', () => {
     const exec = plugin.wrapToolExecutor('email.send', async () => 'ok');
     await expect(exec({})).rejects.toBeInstanceOf(GovernanceDeniedError);
 
-    expect(plugin.getTalkSystemPrompt()).toContain('# Penn');
+    expect(plugin.getTalkSystemPrompt()).toContain('# Sales Agent');
     expect(plugin.hooks.before_tool_call).toBeDefined();
 
     plugin.stop();
@@ -127,7 +127,7 @@ describe('createHermesGovernancePlugin', () => {
       baseUrl: 'https://example.test',
       token: 'tok',
       verifyKey: SECRET,
-      agentKey: 'penn',
+      agentKey: 'sales-agent',
       refreshIntervalMs: 0,
       fetchImpl: mockFetch(bundle),
       onRequireApproval: async () => 'approved',

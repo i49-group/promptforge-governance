@@ -158,6 +158,24 @@ class ReporterTest(unittest.TestCase):
         self.assertTrue(bodies[0]["observed_at"].endswith("Z"))
         self.assertEqual(r.sent, 3)
 
+    def test_report_names_the_build_that_sent_it(self):
+        seen = {}
+
+        def fake_urlopen(req, timeout):
+            seen.update({k.lower(): v for k, v in req.header_items()})
+            return _Resp(b'{"data":{"accepted":true}}')
+
+        r = _reporter(
+            dict(CONFIG),
+            lambda: 0.0,
+            identity_headers=lambda: {"X-PromptForge-PEP-Build": "abc123", "Authorization": "spoof"},
+        )
+        with mock.patch.object(hp.urllib.request, "urlopen", fake_urlopen):
+            r.check()
+            r.drain()
+        self.assertEqual(seen.get("x-promptforge-pep-build"), "abc123")
+        self.assertEqual(seen.get("authorization"), "Bearer tok")
+
     def test_rejected_report_is_retried_on_the_next_check(self):
         r = _reporter(dict(CONFIG), lambda: 0.0)
         with mock.patch.object(

@@ -36,14 +36,14 @@ try:
     from . import pdp as pdp_mod
     from . import messages as msg
     from .reporter import DecisionReporter
-    from .host_permissions import HostPermissionsReporter
+    from .host_permissions import PLUGIN_RULE_PREFIX, HostPermissionsReporter, load_host_config
 except ImportError:  # loaded as flat plugin directory on sys.path
     from pdp import GovernancePdp, PdpError  # type: ignore
     import build  # type: ignore
     import pdp as pdp_mod  # type: ignore
     import messages as msg  # type: ignore
     from reporter import DecisionReporter  # type: ignore
-    from host_permissions import HostPermissionsReporter  # type: ignore
+    from host_permissions import PLUGIN_RULE_PREFIX, HostPermissionsReporter, load_host_config  # type: ignore
 
 logger = logging.getLogger("promptforge.governance")
 
@@ -179,6 +179,26 @@ def _inline_approval_allowed(pdp: GovernancePdp) -> bool:
     """
     bundle = pdp.bundle or {}
     return pdp_mod.inline_approval_enabled(bundle.get("payload") or {})
+
+
+def _host_preapproves(rule_key: str) -> bool:
+    """Whether the host already holds a permanent "always" for this escalation's key.
+
+    Hermes answers an escalation from its allowlist before asking anyone, so escalating a
+    pre-approved key turns PromptForge's require_approval into a silent allow. Checks Hermes's
+    live set (an "always" pressed moments ago) and the saved config (what survives a restart).
+    """
+    key = f"{PLUGIN_RULE_PREFIX}{rule_key}"
+    try:
+        from tools import approval as host_approval  # type: ignore
+
+        with host_approval._lock:
+            if key in host_approval._permanent_approved:
+                return True
+    except Exception:  # noqa: BLE001 — not running inside Hermes, or its internals moved
+        pass
+    allowlist = load_host_config().get("command_allowlist") or []
+    return key in {str(entry).strip() for entry in allowlist}
 
 
 def _agent_key_label() -> str:
@@ -382,11 +402,32 @@ def pre_tool_call(
         except Exception as exc:  # noqa: BLE001 — keep the original decision
             logger.debug("PromptForge revalidation before block failed: %s", exc)
 
-        if result["decision"] == "require_approval" and _inline_approval_allowed(pdp):
-            # The group the policy declared for this act, or None. Previously parsed out of
-            # the act's name, which meant it resolved for no name a host actually sends and
-            # group approval never fired once. Declared grain works for any name.
-            scope = result.get("category")
+        # The group the policy declared for this act, or None. Previously parsed out of the
+        # act's name, which meant it resolved for no name a host actually sends and group
+        # approval never fired once. Declared grain works for any name.
+        scope = result.get("category")
+        # Grain for Hermes's own allowlist. Category-level so one answer clears the rest of
+        # the chain in that domain instead of one link.
+        rule_key = scope or name
+        host_preapproved = (
+            result["decision"] == "require_approval"
+            and _inline_approval_allowed(pdp)
+            and _host_preapproves(rule_key)
+        )
+        if host_preapproved:
+            logger.warning(
+                "PromptForge refused to escalate %s: host allowlist holds %s%s, which would approve it unasked",
+                name,
+                PLUGIN_RULE_PREFIX,
+                rule_key,
+            )
+            result = {
+                **result,
+                "reasons": (result.get("reasons") or [])
+                + [f"host_preapproved:{PLUGIN_RULE_PREFIX}{rule_key}"],
+            }
+
+        if result["decision"] == "require_approval" and _inline_approval_allowed(pdp) and not host_preapproved:
             # Recorded as require_approval, not as an allow. Hermes decides what the
             # human says; all we know here is that policy sent it to one.
             _report(
@@ -412,9 +453,7 @@ def pre_tool_call(
                     tier=str(result.get("tier") or "unknown"),
                     scope=scope,
                 ),
-                # Grain for Hermes's own allowlist. Category-level so one answer
-                # clears the rest of the chain in that domain instead of one link.
-                "rule_key": scope or name,
+                "rule_key": rule_key,
             }
 
         # Only deny and require_approval reach here; allow returned above. Both are

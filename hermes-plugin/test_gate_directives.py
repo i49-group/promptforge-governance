@@ -79,8 +79,36 @@ class FlipToAllowPdp(FakePdp):
 
 
 class GateDirectiveTests(unittest.TestCase):
+    def setUp(self):
+        # Never read the machine's real Hermes config: these tests must not depend on the host.
+        self._host_config = {}
+        self._real_loader = gate.load_host_config
+        gate.load_host_config = lambda: self._host_config
+
     def tearDown(self):
         gate._pdp = None
+        gate.load_host_config = self._real_loader
+
+    def test_host_always_on_the_rule_key_is_not_escalated(self):
+        """A permanent host "always" for the escalation key would approve it unasked, turning
+        PromptForge's require_approval into a silent allow. Block instead and say why."""
+        self._host_config = {"command_allowlist": ["execute_code", "plugin_rule:process.mutate"]}
+        result = self._run(
+            FakePdp("require_approval", inline_approval=True, category="process.mutate"),
+            tool="terminal",
+        )
+        self.assertEqual(result["action"], "block")
+        self.assertIn("plugin_rule:process.mutate", result["message"])
+        self.assertIn("command_allowlist", result["message"])
+        self.assertNotIn("approve it", result["message"].split("What an administrator")[0].lower())
+
+    def test_host_always_on_another_key_still_escalates(self):
+        self._host_config = {"command_allowlist": ["plugin_rule:shell.privileged"]}
+        result = self._run(
+            FakePdp("require_approval", inline_approval=True, category="process.mutate"),
+            tool="terminal",
+        )
+        self.assertEqual(result["action"], "approve")
 
     def _run(self, pdp, tool="email.send_now"):
         gate._pdp = pdp

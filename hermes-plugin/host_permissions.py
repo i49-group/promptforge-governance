@@ -52,6 +52,8 @@ MAX_KEY_LENGTH = 512
 MAX_PLAIN_KEY_LENGTH = 160
 
 UNATTENDED_MODE_KEYS = ("cron_mode", "single_query_mode", "unattended_mode")
+# Hermes stores an "always" on a plugin-escalated approval under this prefix.
+PLUGIN_RULE_PREFIX = "plugin_rule:"
 
 _SECRET_SHAPES = re.compile(
     r"(sk-[A-Za-z0-9_-]{8,}|gh[pousr]_[A-Za-z0-9]{8,}|github_pat_|xox[abposr]-|AKIA[0-9A-Z]{8,}"
@@ -76,7 +78,7 @@ def _default_redact(text: str) -> str:
 def classify(entry: str) -> str:
     if entry.startswith("=command:"):
         return "command_hash"
-    if entry.startswith("plugin_rule:"):
+    if entry.startswith(PLUGIN_RULE_PREFIX):
         return "rule"
     if entry.startswith("/"):
         return "binary"

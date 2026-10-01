@@ -20,10 +20,12 @@ from pathlib import Path
 
 from derive import (
     DERIVABLE_ACTS,
+    DETECTOR_UNAVAILABLE,
     DISPATCH_ACTS,
     FACET_CREDENTIAL,
     FACET_CROSS_PROFILE,
     FACET_DELEGATE,
+    FACET_FLAGGED,
     FACET_NETWORK,
     FACET_NOTIFY,
     FACET_PROCESS,
@@ -547,6 +549,94 @@ class CandidateNaming(unittest.TestCase):
 
     def test_no_facets_yields_no_candidates(self) -> None:
         self.assertEqual(candidate_acts("terminal", []), [])
+
+
+class HostDetectorFacet(unittest.TestCase):
+    """`terminal.flagged` stands for "Hermes would ask about this". It must match Hermes's own
+    detector exactly, tighten only, and never hide the measurement it exists to produce."""
+
+    def setUp(self) -> None:
+        import sys
+        import types
+
+        self._sys = sys
+        self._saved = {k: sys.modules.get(k) for k in ("tools", "tools.approval_detection")}
+        self.seen = []
+
+        def detect(command):
+            self.seen.append(command)
+            if "rm -rf" in command:
+                return (True, "recursive delete", "recursive delete")
+            return (False, None, None)
+
+        detection = types.ModuleType("tools.approval_detection")
+        detection.detect_dangerous_command = detect
+        package = types.ModuleType("tools")
+        package.approval_detection = detection
+        sys.modules["tools"] = package
+        sys.modules["tools.approval_detection"] = detection
+
+    def tearDown(self) -> None:
+        for name, module in self._saved.items():
+            if module is None:
+                self._sys.modules.pop(name, None)
+            else:
+                self._sys.modules[name] = module
+
+    def test_a_detector_match_derives_the_facet_and_its_kind(self) -> None:
+        facets, notes = derive_facets("terminal", {"command": "rm -rf /tmp/x"})
+        self.assertIn(FACET_FLAGGED, facets)
+        self.assertIn("flagged:recursive delete", notes)
+
+    def test_no_match_derives_nothing(self) -> None:
+        facets, notes = derive_facets("terminal", {"command": "ls -la"})
+        self.assertNotIn(FACET_FLAGGED, facets)
+        self.assertFalse(any(n.startswith("flagged:") for n in notes))
+
+    def test_the_detector_sees_the_raw_command_not_the_prose_stripped_one(self) -> None:
+        command = "notes.py append --topic 'cleanup step rm -rf old builds'"
+        derive_facets("terminal", {"command": command})
+        self.assertEqual(self.seen, [command])
+
+    def test_only_terminal_is_flagged(self) -> None:
+        for act in ("execute_code", "write_file"):
+            with self.subTest(act=act):
+                facets, _ = derive_facets(act, {"command": "rm -rf /tmp/x", "path": "/tmp/x"})
+                self.assertNotIn(FACET_FLAGGED, facets)
+
+    def test_unlisted_flag_is_still_measured(self) -> None:
+        result = evaluate_derived(policy({"terminal": OPEN}), "terminal", args={"command": "rm -rf /tmp/x"})
+        self.assertEqual(result["decision"], "allow")
+        reasons = " ".join(result["reasons"])
+        self.assertIn("derived_unlisted:terminal.flagged", reasons)
+        self.assertIn("flagged:recursive delete", reasons)
+
+    def test_listing_the_facet_denies_and_says_why(self) -> None:
+        pol = policy({"terminal": OPEN, "terminal.flagged": DENIED})
+        result = evaluate_derived(pol, "terminal", args={"command": "rm -rf /tmp/x"})
+        self.assertEqual(result["decision"], "deny")
+        self.assertIn("derived_act:terminal.flagged", result["reasons"])
+        self.assertIn("flagged:recursive delete", result["reasons"])
+        clean = evaluate_derived(pol, "terminal", args={"command": "ls -la"})
+        self.assertEqual(clean["decision"], "allow")
+
+    def test_a_missing_detector_is_recorded_and_flags_nothing(self) -> None:
+        self._sys.modules.pop("tools.approval_detection", None)
+        self._sys.modules["tools"] = __import__("types").ModuleType("tools")
+        facets, notes = derive_facets("terminal", {"command": "rm -rf /tmp/x"})
+        self.assertNotIn(FACET_FLAGGED, facets)
+        self.assertIn(DETECTOR_UNAVAILABLE, notes)
+        result = evaluate_derived(policy({"terminal": OPEN}), "terminal", args={"command": "curl https://x"})
+        self.assertIn("derived_unlisted", " ".join(result["reasons"]))
+
+    def test_a_detector_fault_does_not_fail_the_call(self) -> None:
+        def boom(_command):
+            raise RuntimeError("detector bug")
+
+        self._sys.modules["tools.approval_detection"].detect_dangerous_command = boom
+        facets, notes = derive_facets("terminal", {"command": "rm -rf /tmp/x"})
+        self.assertNotIn(FACET_FLAGGED, facets)
+        self.assertIn(DETECTOR_UNAVAILABLE, notes)
 
 
 if __name__ == "__main__":

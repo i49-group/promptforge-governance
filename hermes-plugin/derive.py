@@ -91,6 +91,22 @@ FACET_PROCESS_READ = "process.read"
 FACET_NETWORK = "network"
 FACET_WRITE = "write"
 FACET_READ = "read"
+# The host's own dangerous-command detector matched. Today that match makes Hermes ask whoever is
+# in the chat; naming this facet in a policy lets PromptForge decide instead. Only `terminal`: Hermes
+# runs the detector on shell commands alone, and guards `execute_code` whole, so that act is
+# governed by its own name.
+FACET_FLAGGED = "flagged"
+FLAGGED_ACTS = ("terminal",)
+FLAGGED_NOTE_PREFIX = "flagged:"
+DETECTOR_UNAVAILABLE = "detector_unavailable"
+_FLAGGED_DESCRIPTION_MAX = 80
+# Notes that describe the call rather than explain why narrowing did not apply. They travel into the
+# decision whether or not a facet is listed, and never stand in for `derived_unlisted`.
+INFORMATIONAL_NOTE_PREFIXES = (FLAGGED_NOTE_PREFIX, DETECTOR_UNAVAILABLE)
+
+
+def is_informational_note(note: str) -> bool:
+    return note.startswith(INFORMATIONAL_NOTE_PREFIXES)
 
 # Acts that name a mechanism rather than a capability, and are therefore worth narrowing.
 DERIVABLE_ACTS = ("terminal", "execute_code", "read_file", "write_file", "patch")
@@ -356,6 +372,25 @@ def _path_facets(text: str, agent_key: Optional[str]) -> List[str]:
     return facets
 
 
+def _host_flag(command: str) -> Tuple[Optional[bool], Optional[str]]:
+    """(flagged, description) from Hermes's own detector, or (None, None) when it cannot be read.
+
+    Run on the raw command, not the prose-suppressed one: the facet stands for "Hermes would ask
+    about this", so it must match exactly what Hermes matches. The description is the detector's
+    pattern label, never command text, and is what the would-deny review groups by.
+    """
+    try:
+        from tools.approval_detection import detect_dangerous_command  # type: ignore
+    except Exception:  # noqa: BLE001 — not running inside Hermes, or its internals moved
+        return None, None
+    try:
+        flagged, _key, description = detect_dangerous_command(command)
+    except Exception:  # noqa: BLE001 — a detector fault must not fail the call's evaluation
+        return None, None
+    label = " ".join(str(description or "unspecified").split())[:_FLAGGED_DESCRIPTION_MAX]
+    return bool(flagged), label
+
+
 def derive_facets(
     tool_name: str,
     args: Optional[Dict],
@@ -402,6 +437,13 @@ def derive_facets(
             if facet not in facets and pattern.search(scanned):
                 facets.append(facet)
         facets.extend(f for f in _path_facets(scanned, agent_key) if f not in facets)
+        if base in FLAGGED_ACTS:
+            flagged, description = _host_flag(command)
+            if flagged is None:
+                notes.append(DETECTOR_UNAVAILABLE)
+            elif flagged:
+                facets.append(FACET_FLAGGED)
+                notes.append(FLAGGED_NOTE_PREFIX + description)
         if scanned != command:
             suppressed = sorted(
                 {

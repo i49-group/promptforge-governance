@@ -24,10 +24,10 @@ from uuid import uuid4
 # "No module named 'pdp'" — the plugin does not load and the agent is silently ungoverned.
 try:
     from .build import build_headers
-    from .derive import candidate_acts, derive_facets, dispatched_call
+    from .derive import candidate_acts, derive_facets, dispatched_call, is_informational_note
 except ImportError:  # loaded as flat plugin directory on sys.path
     from build import build_headers  # type: ignore
-    from derive import candidate_acts, derive_facets, dispatched_call  # type: ignore
+    from derive import candidate_acts, derive_facets, dispatched_call, is_informational_note  # type: ignore
 
 
 class PdpError(Exception):
@@ -253,7 +253,7 @@ def evaluate_derived(
         result = evaluate_against_bundle(payload, tool_name, pdp_state, correlation_id)
         reasons = list(result.get("reasons") or [])
         reasons.extend(notes)
-        if candidates and not notes:
+        if candidates and not [n for n in notes if not is_informational_note(n)]:
             # Facets were derived but the policy names none of them, so the narrow
             # restriction this call would have hit does not exist yet. Visible, so the
             # gap is reportable rather than merely absent.
@@ -286,6 +286,7 @@ def evaluate_derived(
         reasons.append("derived_no_tighter_than_base:" + ",".join(listed))
     if len(listed) > 1:
         reasons.append("derived_considered:" + ",".join(listed))
+    reasons.extend(n for n in notes if is_informational_note(n))
     result["reasons"] = reasons
     result["derived_facets"] = facets
     return result

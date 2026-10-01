@@ -181,24 +181,40 @@ def _inline_approval_allowed(pdp: GovernancePdp) -> bool:
     return pdp_mod.inline_approval_enabled(bundle.get("payload") or {})
 
 
-def _host_preapproves(rule_key: str) -> bool:
-    """Whether the host already holds a permanent "always" for this escalation's key.
+SHORTCUT_YOLO = "yolo"
+SHORTCUT_ALWAYS = "always"
+SHORTCUT_SESSION = "session"
+SHORTCUT_UNKNOWN = "unknown"
 
-    Hermes answers an escalation from its allowlist before asking anyone, so escalating a
-    pre-approved key turns PromptForge's require_approval into a silent allow. Checks Hermes's
-    live set (an "always" pressed moments ago) and the saved config (what survives a restart).
+
+def _host_shortcut(rule_key: str) -> Optional[str]:
+    """What, if anything, would answer this escalation on the host without asking a person.
+
+    Hermes's gate checks yolo, then its session and permanent sets, before it prompts anyone.
+    `yolo` and `always` turn PromptForge's require_approval into a silent allow and are refused.
+    `session` is a person's earlier answer in the same conversation and is allowed but labelled.
+    `unknown` means Hermes's state could not be read; the saved allowlist is still checked.
     """
     key = f"{PLUGIN_RULE_PREFIX}{rule_key}"
+    allowlist = load_host_config().get("command_allowlist") or []
+    if key in {str(entry).strip() for entry in allowlist}:
+        return SHORTCUT_ALWAYS
     try:
         from tools import approval as host_approval  # type: ignore
 
+        if host_approval._yolo_active():
+            return SHORTCUT_YOLO
         with host_approval._lock:
             if key in host_approval._permanent_approved:
-                return True
+                return SHORTCUT_ALWAYS
+            session = host_approval._session_approved.get(
+                host_approval.get_current_session_key(), set()
+            )
+            if key in session:
+                return SHORTCUT_SESSION
     except Exception:  # noqa: BLE001 — not running inside Hermes, or its internals moved
-        pass
-    allowlist = load_host_config().get("command_allowlist") or []
-    return key in {str(entry).strip() for entry in allowlist}
+        return SHORTCUT_UNKNOWN
+    return None
 
 
 def _agent_key_label() -> str:
@@ -409,39 +425,43 @@ def pre_tool_call(
         # Grain for Hermes's own allowlist. Category-level so one answer clears the rest of
         # the chain in that domain instead of one link.
         rule_key = scope or name
-        host_preapproved = (
-            result["decision"] == "require_approval"
-            and _inline_approval_allowed(pdp)
-            and _host_preapproves(rule_key)
-        )
-        if host_preapproved:
+        escalate = result["decision"] == "require_approval" and _inline_approval_allowed(pdp)
+        shortcut = _host_shortcut(rule_key) if escalate else None
+        if shortcut in (SHORTCUT_ALWAYS, SHORTCUT_YOLO):
             logger.warning(
-                "PromptForge refused to escalate %s: host allowlist holds %s%s, which would approve it unasked",
+                "PromptForge refused to escalate %s: host %s would approve %s%s unasked",
                 name,
+                shortcut,
                 PLUGIN_RULE_PREFIX,
                 rule_key,
             )
-            result = {
-                **result,
-                "reasons": (result.get("reasons") or [])
-                + [f"host_preapproved:{PLUGIN_RULE_PREFIX}{rule_key}"],
-            }
+            refusal = (
+                f"host_preapproved:{PLUGIN_RULE_PREFIX}{rule_key}"
+                if shortcut == SHORTCUT_ALWAYS
+                else "host_yolo_refused"
+            )
+            result = {**result, "reasons": (result.get("reasons") or []) + [refusal]}
+            escalate = False
 
-        if result["decision"] == "require_approval" and _inline_approval_allowed(pdp) and not host_preapproved:
+        if escalate:
             # Recorded as require_approval, not as an allow. Hermes decides what the
-            # human says; all we know here is that policy sent it to one.
+            # human says; all we know here is that policy sent it to one, and whether a
+            # person is about to be asked or an earlier answer in this session covers it.
+            reasons = (result.get("reasons") or []) + [
+                f"approval_source:{'prompt' if shortcut is None else shortcut}"
+            ]
             _report(
                 pdp,
                 tool_name=name,
                 decision="require_approval",
-                reasons=(result.get("reasons") or []) + ["escalated_to_host_gate"],
+                reasons=reasons + ["escalated_to_host_gate"],
                 correlation_id=result.get("correlation_id"),
             )
             _remember_escalation(
                 _escalation_key(name, task_id, str(kwargs.get("tool_call_id") or "")),
                 {
                     "tool_name": name,
-                    "reasons": result.get("reasons") or [],
+                    "reasons": reasons,
                     "correlation_id": result.get("correlation_id"),
                 },
             )

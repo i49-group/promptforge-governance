@@ -110,6 +110,7 @@ class GateDirectiveTests(unittest.TestCase):
         )
         self.assertEqual(result["action"], "approve")
 
+
     def _run(self, pdp, tool="email.send_now"):
         gate._pdp = pdp
         return gate.pre_tool_call(tool_name=tool, task_id="corr-1")
@@ -203,6 +204,101 @@ class GateDirectiveTests(unittest.TestCase):
         gate._pdp = FakePdp("allow")
         result = gate.pre_tool_call(tool_name="")
         self.assertEqual(result["action"], "block")
+
+
+class FakeHostApproval:
+    """Stands in for Hermes's `tools.approval` state the gate reads before escalating."""
+
+    def __init__(self, *, yolo=False, permanent=(), session=()):
+        import threading
+
+        self._lock = threading.Lock()
+        self._yolo = yolo
+        self._permanent_approved = set(permanent)
+        self._session_approved = {"s1": set(session)}
+
+    def _yolo_active(self):
+        return self._yolo
+
+    def get_current_session_key(self):
+        return "s1"
+
+
+class HostShortcutTests(unittest.TestCase):
+    """Hermes answers an escalation from yolo, its permanent set or its session set before it
+    asks anyone. The first two make PromptForge's require_approval a silent allow."""
+
+    def setUp(self):
+        import sys
+        import types
+
+        self._real_loader = gate.load_host_config
+        gate.load_host_config = lambda: {}
+        self._tools_before = sys.modules.get("tools")
+        self._approval_before = sys.modules.get("tools.approval")
+        self.reported = []
+        self._real_report = gate._report
+        gate._report = lambda pdp, **kw: self.reported.append(kw)
+        self._sys = sys
+        self._types = types
+
+    def tearDown(self):
+        gate._pdp = None
+        gate.load_host_config = self._real_loader
+        gate._report = self._real_report
+        for name, before in (("tools", self._tools_before), ("tools.approval", self._approval_before)):
+            if before is None:
+                self._sys.modules.pop(name, None)
+            else:
+                self._sys.modules[name] = before
+
+    def _with_host(self, host):
+        package = self._types.ModuleType("tools")
+        package.approval = host
+        self._sys.modules["tools"] = package
+        self._sys.modules["tools.approval"] = host
+
+    def _run(self):
+        gate._pdp = FakePdp("require_approval", inline_approval=True, category="process.mutate")
+        return gate.pre_tool_call(tool_name="terminal", task_id="corr-1", tool_call_id="c1")
+
+    def test_yolo_is_refused(self):
+        self._with_host(FakeHostApproval(yolo=True))
+        result = self._run()
+        self.assertEqual(result["action"], "block")
+        self.assertIn("yolo", result["message"])
+        self.assertIn("host_yolo_refused", self.reported[-1]["reasons"])
+
+    def test_a_live_always_is_refused(self):
+        self._with_host(FakeHostApproval(permanent={"plugin_rule:process.mutate"}))
+        result = self._run()
+        self.assertEqual(result["action"], "block")
+        self.assertIn("host_preapproved:plugin_rule:process.mutate", self.reported[-1]["reasons"])
+
+    def test_session_approval_escalates_and_is_labelled(self):
+        self._with_host(FakeHostApproval(session={"plugin_rule:process.mutate"}))
+        result = self._run()
+        self.assertEqual(result["action"], "approve")
+        self.assertIn("approval_source:session", self.reported[-1]["reasons"])
+
+    def test_no_shortcut_means_a_person_is_asked(self):
+        self._with_host(FakeHostApproval())
+        self._run()
+        self.assertIn("approval_source:prompt", self.reported[-1]["reasons"])
+
+    def test_the_label_follows_the_act_onto_its_ran_row(self):
+        self._with_host(FakeHostApproval(session={"plugin_rule:process.mutate"}))
+        self._run()
+        gate.post_tool_call(tool_name="terminal", task_id="corr-1", tool_call_id="c1")
+        ran = self.reported[-1]["reasons"]
+        self.assertIn("human_approved", ran)
+        self.assertIn("approval_source:session", ran)
+
+    def test_unreadable_host_state_is_labelled_unknown_not_prompt(self):
+        self._sys.modules.pop("tools.approval", None)
+        self._sys.modules["tools"] = self._types.ModuleType("tools")
+        self._run()
+        self.assertIn("approval_source:unknown", self.reported[-1]["reasons"])
 
 
 if __name__ == "__main__":

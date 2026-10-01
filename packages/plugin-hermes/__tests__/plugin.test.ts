@@ -102,7 +102,8 @@ describe('createHermesGovernancePlugin', () => {
       expect(deny.proceed).toBe(false);
       expect(deny.decision).toBe('deny');
       expect(deny.message).toContain('TOOL BLOCKED BY PROMPTFORGE');
-      expect(deny.message).toContain('What to do:');
+      expect(deny.message).toContain('What an administrator can change:');
+      expect(deny.message).toContain('Do not ask the user to approve it');
       expect(deny.message).toContain('admin/ai-governance');
 
     const exec = plugin.wrapToolExecutor('email.send', async () => 'ok');

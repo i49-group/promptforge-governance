@@ -24,7 +24,7 @@ import sys
 import uuid
 from pathlib import Path
 
-VERSION = "1.10.3"
+VERSION = "1.11.0"
 
 # Runtime modules only. Tests are excluded because they do not enforce anything, and including
 # them would report a new build for a change that cannot alter a decision.

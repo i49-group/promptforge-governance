@@ -89,9 +89,9 @@
   <text class="l" x="408" y="300">fetched</text>
   <text class="l" x="408" y="316">every few minutes</text>
   <path class="e" d="M920 124V160H1035V423"/>
-  <text class="l" x="1045" y="290">fetched, at most</text>
-  <text class="l" x="1045" y="306">every 10 min</text>
-  <text class="l" x="1045" y="322">while in use</text>
+  <text class="l" x="1045" y="290">fetched on a</text>
+  <text class="l" x="1045" y="306">configurable interval,</text>
+  <text class="l" x="1045" y="322">e.g. every 10 min</text>
 
   <rect class="zone pf" x="20" y="620" width="1160" height="84"/>
   <text class="zt" x="40" y="648">PromptForge</text>

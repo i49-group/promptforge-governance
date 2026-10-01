@@ -185,6 +185,22 @@ _COMMAND_PATTERNS: List[Tuple[str, "re.Pattern[str]", str]] = [
      "systemd unit state changed"),
     (FACET_PROCESS_MUTATE, re.compile(r"\bservice\s+\S+\s+(start|stop|restart|reload)\b", re.I),
      "sysv service state changed"),
+    # Any other verb counts as mutation. The lists above name the common verbs; `launchctl setenv`,
+    # `launchctl config` and `systemctl daemon-reload` change state too and matched neither list,
+    # so a policy gating only `process.mutate` would have let them through ungated. An unrecognised
+    # verb now asks; only the read verbs below are exempt. Leading flags are skipped.
+    (FACET_PROCESS_MUTATE,
+     re.compile(r"\blaunchctl(?:\s+-\S+)*\s+(?!(?:print|print-cache|print-disabled|list|dumpstate"
+                r"|blame|examine|help|version)\b)[a-z]", re.I),
+     "launchd verb not known to be read-only"),
+    (FACET_PROCESS_MUTATE,
+     re.compile(r"\bsystemctl(?:\s+-\S+)*\s+(?!(?:status|show|list-units|list-unit-files"
+                r"|list-timers|is-active|is-enabled|is-failed|cat|help)\b)[a-z]", re.I),
+     "systemd verb not known to be read-only"),
+    (FACET_PROCESS_MUTATE,
+     re.compile(r"(?:^|[;&|]\s*|\bsudo\s+)service\s+(?!--status-all\b)[\w@.-]+\s+(?!status\b)[a-z]",
+                re.I | re.M),
+     "sysv service verb not known to be read-only"),
     # Inspection: reads state and changes none.
     (FACET_PROCESS_READ, re.compile(r"\b(ps|pgrep|pidof|top|htop)\b", re.I),
      "process table inspected"),
@@ -193,8 +209,8 @@ _COMMAND_PATTERNS: List[Tuple[str, "re.Pattern[str]", str]] = [
                 re.I),
      "launchd state inspected"),
     (FACET_PROCESS_READ,
-     re.compile(r"\bsystemctl\s+(status|show|list-units|list-unit-files|is-active|is-enabled|cat)\b",
-                re.I),
+     re.compile(r"\bsystemctl(?:\s+-\S+)*\s+(status|show|list-units|list-unit-files|list-timers"
+                r"|is-active|is-enabled|is-failed|cat)\b", re.I),
      "systemd state inspected"),
     # Spawning gets no sub-facet on purpose. `nohup`, `disown`, `subprocess` and `popen` start a
     # process, which is what `terminal` and `execute_code` *are* — an agent holding either can

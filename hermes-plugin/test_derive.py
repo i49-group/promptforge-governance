@@ -425,6 +425,31 @@ class ProcessFacetGrain(unittest.TestCase):
             self.assertIn(FACET_PROCESS_READ, facets, command)
             self.assertNotIn(FACET_PROCESS_MUTATE, facets, command)
 
+    def test_an_unrecognised_service_verb_counts_as_mutation(self) -> None:
+        # These change state but matched neither verb list, so a policy gating only
+        # `process.mutate` let them run ungated.
+        for command in (
+            "launchctl setenv PATH /tmp/evil",
+            "launchctl config user path /tmp",
+            "launchctl -w unload ~/Library/LaunchAgents/x.plist",
+            "systemctl daemon-reload",
+            "systemctl --user edit worker",
+            "service worker force-reload",
+        ):
+            facets, _ = derive_facets("terminal", {"command": command})
+            self.assertIn(FACET_PROCESS_MUTATE, facets, command)
+
+        for command in (
+            "systemctl --user status worker",
+            "systemctl list-timers",
+            "service worker status",
+            "service --status-all",
+            "launchctl help",
+            "aws ecs update-service --cluster prod --service web force-new-deployment",
+        ):
+            facets, _ = derive_facets("terminal", {"command": command})
+            self.assertNotIn(FACET_PROCESS_MUTATE, facets, command)
+
     def test_spawning_earns_no_sub_facet(self) -> None:
         # Starting a process is what `terminal` and `execute_code` are. A gate here would charge
         # for the act already granted, and it was the largest bucket in the measurement.

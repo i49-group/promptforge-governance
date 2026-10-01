@@ -34,10 +34,11 @@ not enforced anything.
 
 ### 1.1 The pieces and their names
 
-PromptForge publishes two things for each agent. **Talk** is what the
-agent is told: it goes into the model's prompt context, so it shapes
-behaviour but cannot guarantee it. **Act** is what the agent may do: a
-signed policy that checks outside the model enforce, giving the same
+PromptForge publishes two things for each agent. **Talk** (context) is
+what the agent is told. It goes into the model's prompt context, so it
+is *probabilistic*: it shapes behaviour but cannot guarantee it.
+**Act** (the signed policy bundle) is what the agent may do. It is
+*deterministic*: checks outside the model enforce it, giving the same
 answer to the same call every time. Put anything that must hold in
 Act.
 
@@ -46,7 +47,7 @@ leaves it, and once by the provider before it does the work. Both
 checks read the same signed policy, answer each call with allow, ask
 (a person approves first) or deny, and can report what they decided.
 
-![How PromptForge governs a tool call: the Talk pack goes into the model's prompt context as guidance; the signed Act bundle is fetched by the host check and the provider check, which answer each call with allow, ask or deny and report their decisions back to PromptForge.](../images/governance-ecosystem.svg)
+![How PromptForge governs a tool call: context (the Talk pack) goes into the model's prompt context and is probabilistic, not enforced; the signed policy bundle (Act) is deterministic and is fetched by the host check and the provider check, which answer each call with allow, ask or deny and report their decisions back to PromptForge.](../images/governance-ecosystem.svg)
 
 Each check's refresh interval is configurable. A provider check
 re-fetches when its copy is older than that interval, for example
@@ -63,8 +64,8 @@ every 10 minutes.
 | MCP server | How a provider offers its tools to hosts. The host connects to it as an MCP client, under a server name the host chooses | the CRM's MCP endpoint, connected as `crm` |
 | Naming convention | How a host spells a provider's tool when it offers it to the model | `email.send_now` offered as `mcp__crm__email_send_now` |
 | Enforcement point | A check that looks policy up: the host's, or a provider's own | the host plugin; the CRM's MCP-boundary check |
-| Talk pack | What the agent is told (identity, principles, operating rules). It goes into the model's prompt context; nothing enforces it | "Always confirm before emailing a customer" |
-| Act | What the agent may do: the policy and its signed bundle, enforced by checks outside the model | the rules that let `sales-agent` call `email.send_now` |
+| Context (Talk pack) | What the agent is told (identity, principles, operating rules). It goes into the model's prompt context; probabilistic, nothing enforces it | "Always confirm before emailing a customer" |
+| Act | What the agent may do: the policy and its signed policy bundle; deterministic, enforced by checks outside the model | the rules that let `sales-agent` call `email.send_now` |
 | Policy | What an agent may do, per action, authored in PromptForge | `sales-agent` may call `email.send_now`, with approval |
 | Bundle | The signed copy of a policy that each check downloads, with every name spelled exactly as that check will look it up | `sales-agent`'s bundle, version 13 |
 | Decision | One check's answer to one tool call: allow, ask (`require_approval`) or deny, reported to PromptForge | `deny`, reason `unknown_tool` |

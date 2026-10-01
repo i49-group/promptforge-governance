@@ -176,6 +176,7 @@ class HostPermissionsReporter:
         clock: Callable[[], float] = time.time,
         timeout_s: float = POST_TIMEOUT_S,
         resend_s: float = RESEND_SECONDS,
+        identity_headers: Callable[[], dict] = dict,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.token = token
@@ -186,6 +187,9 @@ class HostPermissionsReporter:
         self._clock = clock
         self.timeout_s = timeout_s
         self.resend_s = resend_s
+        # Which build is reporting, the same headers the policy fetch sends, so the stored snapshot
+        # names the code that read the host config.
+        self._identity_headers = identity_headers
         # One slot: only the newest snapshot is worth sending.
         self._queue: queue.Queue = queue.Queue(maxsize=1)
         self._worker: Optional[threading.Thread] = None
@@ -256,6 +260,7 @@ class HostPermissionsReporter:
             f"{self.base_url}{HOST_PERMISSIONS_PATH}",
             data=json.dumps(payload).encode("utf-8"),
             headers={
+                **self._identity_headers(),
                 "Authorization": f"Bearer {self.token}",
                 "Content-Type": "application/json",
                 "Accept": "application/json",

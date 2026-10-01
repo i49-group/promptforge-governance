@@ -113,6 +113,7 @@ def _check_host_permissions(pdp: GovernancePdp) -> None:
                 token=pdp.token,
                 agent_key=pdp.agent_key,
                 environment=pdp.environment,
+                identity_headers=build.build_headers,
             )
         _host_reporter.check()
     except Exception as exc:  # noqa: BLE001

@@ -41,6 +41,21 @@ class MessageTests(unittest.TestCase):
         self.assertIn("Add tool", text)
         self.assertIn("Tell the user clearly", text)
 
+    def test_approval_block_never_asks_the_user_to_approve(self) -> None:
+        text = msg.block_policy(
+            tool_name="terminal",
+            agent_key="sales-agent",
+            decision="require_approval",
+            reasons=["requires_approval", "tool:terminal"],
+            bundle_version="v1",
+            pdp_state="normal",
+        )
+        self.assertIn("did not run", text)
+        self.assertIn("Do not ask the user to approve it", text)
+        self.assertIn("another way", text)
+        self.assertNotIn("operator approve", text)
+        self.assertNotIn("What to do:", text)
+
     def test_session_not_ready(self) -> None:
         text = msg.session_not_ready_context(
             agent_key="sales-agent", error="HTTP 404"

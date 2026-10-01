@@ -116,30 +116,31 @@ export function policyBlockMessage(
   let title: string;
   let steps: string[];
 
+  // Steps are for a PromptForge administrator, never the person in the chat. Agents
+  // relay this text, so any step that mentions getting approval becomes a request to
+  // the user to approve the blocked action.
   if (
     result.decision === 'require_approval' ||
     reasonL.some((r) => r.includes('requires_approval'))
   ) {
-    title =
-      'This tool requires human approval under PromptForge Act policy.';
+    title = `\`${toolName}\` needs an administrator's approval under PromptForge policy, and approval is not available in this conversation. It did not run.`;
     steps = [
-      'Have an operator approve the action in your ops host (e.g. your ops platform), or',
-      `In PromptForge (${ADMIN_URL}) open agent \`${agentKey}\` → Act policy → set requires_approval=false for \`${toolName}\` if intentional → Publish.`,
-      'Then retry (hosts refresh bundles periodically).',
+      `In PromptForge (${ADMIN_URL}) open agent \`${agentKey}\` → Act policy.`,
+      `If \`${toolName}\` should run without approval, set requires_approval=false → Publish.`,
+      'The host picks up the published change within a few minutes.',
     ];
   } else if (reasonL.some((r) => r.includes('unknown_tool'))) {
-    title = `\`${toolName}\` is not in the published Act inventory for \`${agentKey}\`.`;
+    title = `\`${toolName}\` is not in the published Act inventory for \`${agentKey}\`. It did not run.`;
     steps = [
       `Open ${ADMIN_URL} → package \`${agentKey}\` → Act policy.`,
       `Add tool \`${toolName}\` with the correct tier / granted / requires_approval.`,
-      'Click Publish, then retry after bundle refresh.',
+      'Click Publish. The host picks it up within a few minutes.',
     ];
   } else if (reasonL.some((r) => r.includes('not_granted'))) {
-    title = `\`${toolName}\` is explicitly not granted in PromptForge Act policy.`;
+    title = `\`${toolName}\` is not granted in PromptForge Act policy. It did not run.`;
     steps = [
       `Open ${ADMIN_URL} → package \`${agentKey}\` → Act policy.`,
       `Set granted=true for \`${toolName}\` (if appropriate) → Publish.`,
-      'Retry after bundle refresh.',
     ];
   } else if (
     reasonL.some((r) => r.includes('fail_closed')) ||
@@ -153,7 +154,7 @@ export function policyBlockMessage(
       `Install help: ${INSTALL_URL}`,
     ];
   } else {
-    title = `PromptForge Act policy denied \`${toolName}\`.`;
+    title = `PromptForge Act policy denied \`${toolName}\`. It did not run.`;
     steps = [
       `Review Act policy for \`${agentKey}\` at ${ADMIN_URL}.`,
       'Adjust granted / tier / requires_approval → Publish.',
@@ -169,11 +170,11 @@ export function policyBlockMessage(
     '',
     title,
     '',
-    'What to do:',
+    'What an administrator can change:',
     bullets(steps),
     '',
     `Reasons: ${joined}`,
-    'Tell the user clearly that PromptForge blocked this tool and summarize the steps above.',
+    'Tell the user clearly that PromptForge policy blocked this action and what an administrator can change. Do not ask the user to approve it, grant permission, or run it themselves, and do not try to reach the same result another way (a different tool, a script, or a rewritten command). Continue with the parts of the task that do not need it.',
   ].join('\n');
 }
 

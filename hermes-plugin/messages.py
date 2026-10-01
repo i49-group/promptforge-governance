@@ -133,31 +133,35 @@ def block_policy(
     reason_l = [r.lower() for r in reasons]
     joined = ", ".join(reasons) if reasons else "policy"
 
+    # Steps are for a PromptForge administrator, never the person in the chat. Agents
+    # relay this text, so any step that mentions getting approval becomes a request to
+    # the user to approve the blocked action.
     if decision == "require_approval" or any(
         "requires_approval" in r for r in reason_l
     ):
-        title = "This tool requires human approval under PromptForge Act policy."
+        title = (
+            f"`{tool_name}` needs an administrator's approval under PromptForge policy, "
+            "and approval is not available in this conversation. It did not run."
+        )
         steps = [
-            "Have an operator approve the action in your ops host (e.g. your ops platform's approval card), or",
-            f"In PromptForge ({ADMIN_URL}) open agent `{agent_key}` → Act policy → set requires_approval=false for `{tool_name}` if that is intentional → Publish.",
-            "Then retry the request (hosts refresh bundles on a schedule; wait up to a few minutes or restart Hermes).",
+            f"In PromptForge ({ADMIN_URL}) open agent `{agent_key}` → Act policy.",
+            f"If `{tool_name}` should run without approval, set requires_approval=false → Publish.",
+            "The host picks up the published change within a few minutes.",
         ]
     elif any("unknown_tool" in r for r in reason_l):
         title = (
-            f"`{tool_name}` is not in the published Act inventory for `{agent_key}`."
+            f"`{tool_name}` is not in the published Act inventory for `{agent_key}`. It did not run."
         )
         steps = [
             f"Open {ADMIN_URL} → package `{agent_key}` → Act policy.",
             f"Add tool `{tool_name}` with the correct tier / granted / requires_approval.",
-            "Click Publish.",
-            "Retry after the host refreshes the signed bundle.",
+            "Click Publish. The host picks it up within a few minutes.",
         ]
     elif any("not_granted" in r for r in reason_l):
-        title = f"`{tool_name}` is explicitly not granted in PromptForge Act policy."
+        title = f"`{tool_name}` is not granted in PromptForge Act policy. It did not run."
         steps = [
             f"Open {ADMIN_URL} → package `{agent_key}` → Act policy.",
             f"Set granted=true for `{tool_name}` (if appropriate) → Publish.",
-            "Retry after bundle refresh.",
         ]
     elif any("fail_closed" in r for r in reason_l) or pdp_state == "fail_closed":
         title = (
@@ -170,7 +174,7 @@ def block_policy(
             f"Install/refresh help: {INSTALL_URL}",
         ]
     else:
-        title = f"PromptForge Act policy denied `{tool_name}`."
+        title = f"PromptForge Act policy denied `{tool_name}`. It did not run."
         steps = [
             f"Review Act policy for `{agent_key}` at {ADMIN_URL}.",
             "Adjust granted / tier / requires_approval → Publish.",
@@ -183,9 +187,13 @@ def block_policy(
         f"Agent: `{agent_key}`\n"
         f"Decision: {decision} · Bundle: {bundle_version} · PDP state: {pdp_state}\n\n"
         f"{title}\n\n"
-        f"What to do:\n{_bullet(steps)}\n\n"
+        f"What an administrator can change:\n{_bullet(steps)}\n\n"
         f"Reasons: {joined}\n"
-        "Tell the user clearly that PromptForge blocked this tool and summarize the steps above."
+        "Tell the user clearly that PromptForge policy blocked this action and what an "
+        "administrator can change. Do not ask the user to approve it, grant permission, "
+        "or run it themselves, and do not try to reach the same result another way (a "
+        "different tool, a script, or a rewritten command). Continue with the parts of "
+        "the task that do not need it."
     )
 
 

@@ -20,6 +20,7 @@ from pathlib import Path
 
 from derive import (
     DERIVABLE_ACTS,
+    DETECTOR_SELFTEST_FAILED,
     DETECTOR_UNAVAILABLE,
     DISPATCH_ACTS,
     FACET_CREDENTIAL,
@@ -567,6 +568,8 @@ class HostDetectorFacet(unittest.TestCase):
             self.seen.append(command)
             if "rm -rf" in command:
                 return (True, "recursive delete", "recursive delete")
+            if "push --force" in command:
+                return (True, "force push", "force push")
             return (False, None, None)
 
         detection = types.ModuleType("tools.approval_detection")
@@ -596,7 +599,7 @@ class HostDetectorFacet(unittest.TestCase):
     def test_the_detector_sees_the_raw_command_not_the_prose_stripped_one(self) -> None:
         command = "notes.py append --topic 'cleanup step rm -rf old builds'"
         derive_facets("terminal", {"command": command})
-        self.assertEqual(self.seen, [command])
+        self.assertEqual(self.seen[-1], command)
 
     def test_only_terminal_is_flagged(self) -> None:
         for act in ("execute_code", "write_file"):
@@ -637,6 +640,35 @@ class HostDetectorFacet(unittest.TestCase):
         facets, notes = derive_facets("terminal", {"command": "rm -rf /tmp/x"})
         self.assertNotIn(FACET_FLAGGED, facets)
         self.assertIn(DETECTOR_UNAVAILABLE, notes)
+
+    def _install(self, detect) -> None:
+        self._sys.modules["tools.approval_detection"].detect_dangerous_command = detect
+
+    def test_a_detector_that_flags_nothing_fails_its_self_test(self) -> None:
+        self._install(lambda _command: (False, None, None))
+        facets, notes = derive_facets("terminal", {"command": "rm -rf /tmp/x"})
+        self.assertNotIn(FACET_FLAGGED, facets)
+        self.assertIn(DETECTOR_SELFTEST_FAILED, notes)
+        self.assertNotIn(DETECTOR_UNAVAILABLE, notes)
+
+    def test_a_detector_that_flags_everything_fails_its_self_test(self) -> None:
+        self._install(lambda _command: (True, "x", "anything"))
+        facets, notes = derive_facets("terminal", {"command": "ls -la"})
+        self.assertNotIn(FACET_FLAGGED, facets)
+        self.assertIn(DETECTOR_SELFTEST_FAILED, notes)
+
+    def test_a_failed_self_test_is_still_measured(self) -> None:
+        self._install(lambda _command: (False, None, None))
+        result = evaluate_derived(policy({"terminal": OPEN}), "terminal", args={"command": "curl https://x"})
+        self.assertIn(DETECTOR_SELFTEST_FAILED, result["reasons"])
+        self.assertIn("derived_unlisted", " ".join(result["reasons"]))
+
+    def test_the_self_test_runs_once_per_detector(self) -> None:
+        derive_facets("terminal", {"command": "ls"})
+        probes = len(self.seen) - 1
+        derive_facets("terminal", {"command": "pwd"})
+        self.assertGreater(probes, 0)
+        self.assertEqual(len(self.seen), probes + 2)
 
 
 if __name__ == "__main__":

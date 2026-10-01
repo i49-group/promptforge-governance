@@ -24,7 +24,7 @@ import sys
 import uuid
 from pathlib import Path
 
-VERSION = "1.9.0"
+VERSION = "1.10.0"
 
 # Runtime modules only. Tests are excluded because they do not enforce anything, and including
 # them would report a new build for a change that cannot alter a decision.
@@ -32,6 +32,7 @@ _RUNTIME_MODULES = (
     "__init__.py",
     "build.py",
     "derive.py",
+    "host_permissions.py",
     "messages.py",
     "pdp.py",
     "reporter.py",

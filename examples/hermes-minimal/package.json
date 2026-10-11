@@ -7,8 +7,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@promptforge/governance-pdp": "workspace:*",
-    "@promptforge/plugin-hermes": "workspace:*"
+    "@i49-group/governance-pdp": "workspace:*",
+    "@i49-group/plugin-hermes": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^20.12.2",

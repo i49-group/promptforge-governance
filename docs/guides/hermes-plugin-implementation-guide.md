@@ -274,12 +274,12 @@ Disabling the plugin removes Act enforcement — treat as an incident, not a con
 
 ---
 
-## 11. Relationship to `@promptforge/plugin-hermes` (TypeScript)
+## 11. Relationship to `@i49-group/plugin-hermes` (TypeScript)
 
 | Package | Use when |
 |---------|----------|
 | **`hermes-plugin/`** (this guide) | Native Hermes Agent (`hermes plugins install`) |
-| [`@promptforge/plugin-hermes`](../../packages/plugin-hermes) | Node/TypeScript hosts wrapping tool executors |
+| [`@i49-group/plugin-hermes`](../../packages/plugin-hermes) | Node/TypeScript hosts wrapping tool executors |
 
 Same doctrine; different runtime. Both use PromptForge pack/bundle APIs and fail-closed Act.
 

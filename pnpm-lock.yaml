@@ -10,10 +10,10 @@ importers:
 
   examples/hermes-minimal:
     dependencies:
-      '@promptforge/governance-pdp':
+      '@i49-group/governance-pdp':
         specifier: workspace:*
         version: link:../../packages/governance-pdp
-      '@promptforge/plugin-hermes':
+      '@i49-group/plugin-hermes':
         specifier: workspace:*
         version: link:../../packages/plugin-hermes
     devDependencies:
@@ -47,7 +47,7 @@ importers:
 
   packages/plugin-hermes:
     devDependencies:
-      '@promptforge/governance-pdp':
+      '@i49-group/governance-pdp':
         specifier: workspace:*
         version: link:../governance-pdp
       '@types/jest':

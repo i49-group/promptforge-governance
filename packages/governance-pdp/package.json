@@ -1,6 +1,6 @@
 {
-  "name": "@promptforge/governance-pdp",
-  "version": "0.1.0",
+  "name": "@i49-group/governance-pdp",
+  "version": "0.2.0",
   "description": "Local Policy Decision Point — refresh/verify/cache signed PromptForge governance bundles and evaluate in-process",
   "license": "MIT",
   "repository": {
@@ -14,6 +14,8 @@
     ".": "./src/index.ts"
   },
   "publishConfig": {
+    "access": "public",
+    "provenance": true,
     "main": "./dist/index.js",
     "types": "./dist/index.d.ts",
     "exports": {
@@ -29,6 +31,7 @@
     "README.md"
   ],
   "scripts": {
+    "prepack": "pnpm run build",
     "build": "tsc -p tsconfig.json",
     "test": "jest --config jest.config.js",
     "typecheck": "tsc -p tsconfig.json --noEmit"

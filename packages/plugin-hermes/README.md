@@ -1,13 +1,13 @@
-# `@promptforge/plugin-hermes`
+# `@i49-group/plugin-hermes`
 
 **Policy Enforcement Point (PEP)** for [Hermes](https://github.com/NousResearch/hermes) (and Hermes-compatible harnesses).
 
-This package does **not** put rules in SOUL.md. It gates **tool dispatch** using `@promptforge/governance-pdp` against a signed PromptForge policy bundle.
+This package does **not** put rules in SOUL.md. It gates **tool dispatch** using `@i49-group/governance-pdp` against a signed PromptForge policy bundle.
 
 ## Install
 
 ```bash
-pnpm add @promptforge/plugin-hermes @promptforge/governance-pdp
+npm install @i49-group/plugin-hermes @i49-group/governance-pdp
 ```
 
 ## Wire into Hermes
@@ -15,7 +15,7 @@ pnpm add @promptforge/plugin-hermes @promptforge/governance-pdp
 Call `beforeToolCall` (or register `plugin.hooks`) on **every** tool path — including MCP, local skills, and shell. Any ungated path is ungoverened.
 
 ```ts
-import { createHermesGovernancePlugin } from '@promptforge/plugin-hermes';
+import { createHermesGovernancePlugin } from '@i49-group/plugin-hermes';
 
 const gov = createHermesGovernancePlugin({
   baseUrl: process.env.PF_BASE_URL!,

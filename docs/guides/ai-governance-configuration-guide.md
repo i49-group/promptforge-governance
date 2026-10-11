@@ -225,7 +225,7 @@ PromptForge (PMP)
 | Host type | Preferred pull | Hot-path decide |
 |-----------|----------------|-----------------|
 | Agent harness (Hermes, Cursor, Claude) | MCP / REST pack+bundle | **PEP plugin** + local PDP on cached bundle |
-| Platform backend (e.g. your ops API) | REST | Same `@promptforge/governance-pdp` before execute |
+| Platform backend (e.g. your ops API) | REST | Same `@i49-group/governance-pdp` before execute |
 
 Base URL (production): `https://www.mypromptforge.com`
 

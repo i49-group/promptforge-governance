@@ -3,7 +3,7 @@ import type {
   EvaluateResult,
   GovernancePdp,
   PdpState,
-} from '@promptforge/governance-pdp';
+} from '@i49-group/governance-pdp';
 
 export type ApprovalOutcome = 'approved' | 'denied';
 

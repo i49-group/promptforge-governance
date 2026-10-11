@@ -110,10 +110,22 @@ export interface PdpOptions {
   /** Shared secret for HS256 bundle verification */
   verifyKey: string;
   fetchTimeoutMs?: number;
-  /** Optional injectors for tests */
+  /**
+   * Extra headers on every fetch, e.g. the `x-promptforge-pep-*` identity headers that let
+   * PromptForge tell enforcement points apart. `Authorization` and `Accept` are always set.
+   */
+  headers?: Record<string, string>;
+  /** Replace `fetch`, e.g. to opt out of a framework's fetch cache, or in tests. */
   fetchImpl?: typeof fetch;
   now?: () => number;
 }
+
+/**
+ * How the last policy bundle fetch ended. `not_found` is PromptForge answering 404: it has no
+ * policy for this agent. That is a different fact from `failed` (unreachable, timed out, any other
+ * error status) and a host should record which one it was.
+ */
+export type BundleFetchOutcome = 'ok' | 'not_found' | 'failed' | 'unverified';
 
 export interface GovernancePdp {
   refresh(): Promise<{
@@ -130,4 +142,6 @@ export interface GovernancePdp {
   evaluate(req: EvaluateRequest): EvaluateResult;
   /** Last successfully verified bundle (for advanced hosts) */
   getBundle(): SignedPolicyBundle | null;
+  /** `null` until the first refresh has run. */
+  getLastBundleFetch(): BundleFetchOutcome | null;
 }

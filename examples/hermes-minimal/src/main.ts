@@ -5,7 +5,7 @@
  *   cp .env.example .env  # fill tokens
  *   pnpm start
  */
-import { createHermesGovernancePlugin } from '@promptforge/plugin-hermes';
+import { createHermesGovernancePlugin } from '@i49-group/plugin-hermes';
 
 async function main() {
   const baseUrl = process.env.PF_BASE_URL;

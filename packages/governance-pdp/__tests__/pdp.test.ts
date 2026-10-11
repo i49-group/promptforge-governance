@@ -329,3 +329,89 @@ describe('createGovernancePdp', () => {
     expect(denied.pdp_state).toBe('fail_closed');
   });
 });
+
+describe('createGovernancePdp bundle fetch outcome', () => {
+  function respond(status: number, body: unknown): Response {
+    return {
+      ok: status >= 200 && status < 300,
+      status,
+      statusText: String(status),
+      json: async () => body,
+      text: async () => JSON.stringify(body),
+    } as Response;
+  }
+
+  function pdpWith(route: (url: string) => Response | Promise<Response>) {
+    const fetchImpl = jest.fn(async (url: string, _init?: RequestInit) => route(url));
+    const pdp = createGovernancePdp({
+      baseUrl: 'https://example.com',
+      token: 'tok',
+      agentKey: 'sales-agent',
+      verifyKey: SECRET,
+      headers: { 'x-promptforge-pep-role': 'service' },
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    return { pdp, fetchImpl };
+  }
+
+  it('is null before the first refresh', () => {
+    const { pdp } = pdpWith(() => respond(200, {}));
+    expect(pdp.getLastBundleFetch()).toBeNull();
+  });
+
+  it('tells "no policy" (404) apart from an outage', async () => {
+    const missing = pdpWith((url) =>
+      url.includes('/bundles/')
+        ? respond(404, { success: false, error: 'No policy bundle' })
+        : respond(200, { success: true, data: makePack() })
+    );
+    await expect(missing.pdp.refresh()).rejects.toThrow(/404/);
+    expect(missing.pdp.getLastBundleFetch()).toBe('not_found');
+
+    const down = pdpWith(() => respond(503, { success: false }));
+    await expect(down.pdp.refresh()).rejects.toThrow(/503/);
+    expect(down.pdp.getLastBundleFetch()).toBe('failed');
+
+    const offline = pdpWith(() => {
+      throw new Error('ECONNREFUSED');
+    });
+    await expect(offline.pdp.refresh()).rejects.toThrow(/ECONNREFUSED/);
+    expect(offline.pdp.getLastBundleFetch()).toBe('failed');
+  });
+
+  it('records a bundle that fails verification as unverified', async () => {
+    const bundle = makeBundle();
+    bundle.payload = { ...bundle.payload, version: 'evil' };
+    const { pdp } = pdpWith((url) =>
+      respond(200, { success: true, data: url.includes('/packs/') ? makePack() : bundle })
+    );
+    await expect(pdp.refresh()).rejects.toThrow(/signature/i);
+    expect(pdp.getLastBundleFetch()).toBe('unverified');
+  });
+
+  it('loads the bundle when the pack is missing', async () => {
+    const { pdp } = pdpWith((url) =>
+      url.includes('/packs/')
+        ? respond(404, { success: false })
+        : respond(200, { success: true, data: makeBundle() })
+    );
+    const refreshed = await pdp.refresh();
+    expect(refreshed.packVersion).toBe('unknown');
+    expect(refreshed.state).toBe('normal');
+    expect(pdp.getLastBundleFetch()).toBe('ok');
+    expect(pdp.getContentPack()).toBeNull();
+    expect(
+      pdp.evaluate({ agent_key: 'sales-agent', tool_name: 'calendar.get_events' }).decision
+    ).toBe('allow');
+  });
+
+  it('sends the caller headers without letting them replace Authorization', async () => {
+    const { pdp, fetchImpl } = pdpWith((url) =>
+      respond(200, { success: true, data: url.includes('/packs/') ? makePack() : makeBundle() })
+    );
+    await pdp.refresh();
+    const headers = fetchImpl.mock.calls[0][1]?.headers as Record<string, string>;
+    expect(headers['x-promptforge-pep-role']).toBe('service');
+    expect(headers.Authorization).toBe('Bearer tok');
+  });
+});

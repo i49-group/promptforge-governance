@@ -14,9 +14,9 @@ arguments, so it constrains what an agent may *call* — not everything an agent
 
 | Package | Role |
 |---------|------|
-| [`@promptforge/governance-pdp`](packages/governance-pdp) | Local Policy Decision Point — refresh, verify, cache, `evaluate()` |
-| [`@promptforge/plugin-hermes`](packages/plugin-hermes) | Hermes PEP — gate **tool dispatch** (not SOUL text) |
-| `@promptforge/plugin-openclaw` | Coming next — same pattern |
+| [`@i49-group/governance-pdp`](packages/governance-pdp) | Local Policy Decision Point — refresh, verify, cache, `evaluate()` |
+| [`@i49-group/plugin-hermes`](packages/plugin-hermes) | Hermes PEP — gate **tool dispatch** (not SOUL text) |
+| `@i49-group/plugin-openclaw` | Coming next — same pattern |
 
 ## Why a plugin (not a SOUL line)
 
@@ -206,6 +206,12 @@ pnpm install
 pnpm test
 pnpm typecheck
 ```
+
+## Releasing
+
+Set the same version in `packages/governance-pdp` and `packages/plugin-hermes`, add a
+[CHANGELOG](CHANGELOG.md) entry, merge, then push a `vX.Y.Z` tag. The `publish` workflow runs every
+check again and publishes both packages to npm with provenance.
 
 ## License
 

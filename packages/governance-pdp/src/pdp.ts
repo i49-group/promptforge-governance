@@ -1,6 +1,7 @@
 import { evaluateAgainstBundle } from './evaluate';
 import { derivePdpState } from './state-machine';
 import type {
+  BundleFetchOutcome,
   GovernanceContentPack,
   GovernanceEnvironment,
   GovernancePdp,
@@ -11,6 +12,17 @@ import type {
   EvaluateResult,
 } from './types';
 import { verifyPayloadHs256 } from './verify';
+
+/** A non-OK HTTP answer, kept apart from network errors so a 404 can be told from an outage. */
+export class GovernanceFetchError extends Error {
+  constructor(
+    readonly status: number,
+    message: string
+  ) {
+    super(message);
+    this.name = 'GovernanceFetchError';
+  }
+}
 
 interface StandardEnvelope<T> {
   success: boolean;
@@ -28,6 +40,7 @@ export function createGovernancePdp(options: PdpOptions): GovernancePdp {
   let pack: GovernanceContentPack | null = null;
   let bundle: SignedPolicyBundle | null = null;
   let lastRefreshFailed = false;
+  let lastBundleFetch: BundleFetchOutcome | null = null;
 
   function currentState(): PdpState {
     return derivePdpState(bundle?.payload ?? null, {
@@ -46,6 +59,7 @@ export function createGovernancePdp(options: PdpOptions): GovernancePdp {
       const res = await fetchImpl(url, {
         method: 'GET',
         headers: {
+          ...options.headers,
           Authorization: `Bearer ${options.token}`,
           Accept: 'application/json',
         },
@@ -54,7 +68,7 @@ export function createGovernancePdp(options: PdpOptions): GovernancePdp {
 
       if (!res.ok) {
         const text = await res.text().catch(() => '');
-        throw new Error(`HTTP ${res.status}: ${text || res.statusText}`);
+        throw new GovernanceFetchError(res.status, `HTTP ${res.status}: ${text || res.statusText}`);
       }
 
       const json = (await res.json()) as StandardEnvelope<T>;
@@ -72,20 +86,30 @@ export function createGovernancePdp(options: PdpOptions): GovernancePdp {
       const agentKey = options.agentKey.toLowerCase();
       const qs = `environment=${environment}`;
 
-      try {
-        const [nextPack, nextBundle] = await Promise.all([
-          fetchJson<GovernanceContentPack>(
-            `/api/governance/packs/${encodeURIComponent(agentKey)}?${qs}`
-          ),
-          fetchJson<SignedPolicyBundle>(
-            `/api/governance/bundles/${encodeURIComponent(agentKey)}?${qs}`
-          ),
-        ]);
+      // The pack is Talk and the bundle is Act: a missing or failed pack never stops the bundle.
+      const [packResult, bundleResult] = await Promise.allSettled([
+        fetchJson<GovernanceContentPack>(
+          `/api/governance/packs/${encodeURIComponent(agentKey)}?${qs}`
+        ),
+        fetchJson<SignedPolicyBundle>(
+          `/api/governance/bundles/${encodeURIComponent(agentKey)}?${qs}`
+        ),
+      ]);
+      if (packResult.status === 'fulfilled') pack = packResult.value;
 
-        if (nextBundle.alg !== 'HS256') {
-          throw new Error(`Unsupported bundle alg: ${nextBundle.alg}`);
+      try {
+        if (bundleResult.status === 'rejected') {
+          const err = bundleResult.reason;
+          lastBundleFetch =
+            err instanceof GovernanceFetchError && err.status === 404 ? 'not_found' : 'failed';
+          throw err;
         }
 
+        const nextBundle = bundleResult.value;
+        if (nextBundle.alg !== 'HS256') {
+          lastBundleFetch = 'unverified';
+          throw new Error(`Unsupported bundle alg: ${nextBundle.alg}`);
+        }
         if (
           !verifyPayloadHs256(
             nextBundle.payload,
@@ -93,30 +117,29 @@ export function createGovernancePdp(options: PdpOptions): GovernancePdp {
             options.verifyKey
           )
         ) {
+          lastBundleFetch = 'unverified';
           throw new Error('Bundle signature verification failed');
         }
 
-        pack = nextPack;
         bundle = nextBundle;
+        lastBundleFetch = 'ok';
         lastRefreshFailed = false;
 
-        const state = currentState();
-        return {
-          packVersion: pack.version,
-          bundleVersion: bundle.payload.version,
-          state,
-        };
-      } catch (err) {
-        lastRefreshFailed = true;
-        // Keep last-known pack/bundle; state machine handles grace/fail-closed
-        if (!bundle) {
-          throw err;
-        }
-        const state = currentState();
         return {
           packVersion: pack?.version || 'unknown',
           bundleVersion: bundle.payload.version,
-          state,
+          state: currentState(),
+        };
+      } catch (err) {
+        lastRefreshFailed = true;
+        // Keep last-known bundle; state machine handles grace/fail-closed
+        if (!bundle) {
+          throw err;
+        }
+        return {
+          packVersion: pack?.version || 'unknown',
+          bundleVersion: bundle.payload.version,
+          state: currentState(),
         };
       }
     },
@@ -127,6 +150,10 @@ export function createGovernancePdp(options: PdpOptions): GovernancePdp {
 
     getBundle() {
       return bundle;
+    },
+
+    getLastBundleFetch() {
+      return lastBundleFetch;
     },
 
     getBundleMeta() {

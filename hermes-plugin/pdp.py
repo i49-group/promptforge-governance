@@ -1,7 +1,7 @@
 """
 Minimal local PDP for Hermes (Python).
 
-Mirrors @i49-group/governance-pdp semantics:
+Mirrors @promptforge/governance-pdp semantics:
   refresh pack + signed bundle → verify HS256 → cache → evaluate → fail-closed
 """
 

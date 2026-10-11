@@ -1,4 +1,4 @@
-import { createGovernancePdp } from '@promptforge/governance-pdp';
+import { createGovernancePdp } from '@i49-group/governance-pdp';
 import { gateMessage } from './messages';
 import {
   GovernanceDeniedError,

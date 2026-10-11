@@ -2,8 +2,8 @@ import {
   createHermesGovernancePlugin,
   GovernanceDeniedError,
 } from '../src';
-import type { SignedPolicyBundle } from '@promptforge/governance-pdp';
-import { signPayloadHs256 } from '@promptforge/governance-pdp';
+import type { SignedPolicyBundle } from '@i49-group/governance-pdp';
+import { signPayloadHs256 } from '@i49-group/governance-pdp';
 
 const SECRET = 'test-signing-secret-for-hermes-plugin';
 

@@ -1,6 +1,6 @@
 # hermes-minimal
 
-Demonstrates `@promptforge/plugin-hermes` against a live PromptForge org.
+Demonstrates `@i49-group/plugin-hermes` against a live PromptForge org.
 
 ```bash
 # from repo root

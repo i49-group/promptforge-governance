@@ -1,4 +1,4 @@
-import type { EvaluateResult } from '@promptforge/governance-pdp';
+import type { EvaluateResult } from '@i49-group/governance-pdp';
 
 export const GUIDE_URL =
   'https://github.com/i49-group/promptforge-governance/blob/main/docs/guides/ai-governance-configuration-guide.md';

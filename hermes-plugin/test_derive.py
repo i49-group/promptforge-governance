@@ -144,8 +144,9 @@ class NonNarrowingIsVisible(unittest.TestCase):
     def test_unrecognised_command_is_recorded_distinctly(self) -> None:
         # Distinct from args_unavailable: we saw the arguments and matched nothing, which
         # may mean the pattern set has a gap worth closing.
+        # No Hermes detector here, so terminal fails closed to `flagged`; that is not recognition.
         facets, notes = derive_facets("terminal", {"command": "echo hello"})
-        self.assertEqual(facets, [])
+        self.assertEqual(facets, [FACET_FLAGGED])
         self.assertIn("unclassified", notes)
 
     def test_reason_reaches_the_decision(self) -> None:
@@ -554,7 +555,8 @@ class CandidateNaming(unittest.TestCase):
 
 class HostDetectorFacet(unittest.TestCase):
     """`terminal.flagged` stands for "Hermes would ask about this". It must match Hermes's own
-    detector exactly, tighten only, and never hide the measurement it exists to produce."""
+    detector exactly, tighten only, and never hide the measurement it exists to produce. With no
+    usable detector, every terminal command is flagged."""
 
     def setUp(self) -> None:
         import sys
@@ -623,14 +625,24 @@ class HostDetectorFacet(unittest.TestCase):
         clean = evaluate_derived(pol, "terminal", args={"command": "ls -la"})
         self.assertEqual(clean["decision"], "allow")
 
-    def test_a_missing_detector_is_recorded_and_flags_nothing(self) -> None:
+    def test_a_missing_detector_fails_closed_and_says_why(self) -> None:
         self._sys.modules.pop("tools.approval_detection", None)
         self._sys.modules["tools"] = __import__("types").ModuleType("tools")
-        facets, notes = derive_facets("terminal", {"command": "rm -rf /tmp/x"})
-        self.assertNotIn(FACET_FLAGGED, facets)
+        facets, notes = derive_facets("terminal", {"command": "ls -la"})
+        self.assertIn(FACET_FLAGGED, facets)
         self.assertIn(DETECTOR_UNAVAILABLE, notes)
+        self.assertFalse(any(n.startswith("flagged:") for n in notes))
         result = evaluate_derived(policy({"terminal": OPEN}), "terminal", args={"command": "curl https://x"})
-        self.assertIn("derived_unlisted", " ".join(result["reasons"]))
+        self.assertEqual(result["decision"], "allow")
+        self.assertIn("derived_unlisted:terminal.flagged", " ".join(result["reasons"]))
+
+    def test_a_policy_denying_the_facet_refuses_every_command_without_a_detector(self) -> None:
+        self._install(lambda _command: (False, None, None))
+        pol = policy({"terminal": OPEN, "terminal.flagged": DENIED})
+        result = evaluate_derived(pol, "terminal", args={"command": "ls -la"})
+        self.assertEqual(result["decision"], "deny")
+        self.assertIn("derived_act:terminal.flagged", result["reasons"])
+        self.assertIn(DETECTOR_SELFTEST_FAILED, result["reasons"])
 
     def test_a_detector_fault_does_not_fail_the_call(self) -> None:
         def boom(_command):
@@ -638,7 +650,7 @@ class HostDetectorFacet(unittest.TestCase):
 
         self._sys.modules["tools.approval_detection"].detect_dangerous_command = boom
         facets, notes = derive_facets("terminal", {"command": "rm -rf /tmp/x"})
-        self.assertNotIn(FACET_FLAGGED, facets)
+        self.assertIn(FACET_FLAGGED, facets)
         self.assertIn(DETECTOR_UNAVAILABLE, notes)
 
     def _install(self, detect) -> None:
@@ -647,15 +659,16 @@ class HostDetectorFacet(unittest.TestCase):
     def test_a_detector_that_flags_nothing_fails_its_self_test(self) -> None:
         self._install(lambda _command: (False, None, None))
         facets, notes = derive_facets("terminal", {"command": "rm -rf /tmp/x"})
-        self.assertNotIn(FACET_FLAGGED, facets)
+        self.assertIn(FACET_FLAGGED, facets)
         self.assertIn(DETECTOR_SELFTEST_FAILED, notes)
         self.assertNotIn(DETECTOR_UNAVAILABLE, notes)
 
     def test_a_detector_that_flags_everything_fails_its_self_test(self) -> None:
         self._install(lambda _command: (True, "x", "anything"))
         facets, notes = derive_facets("terminal", {"command": "ls -la"})
-        self.assertNotIn(FACET_FLAGGED, facets)
+        self.assertIn(FACET_FLAGGED, facets)
         self.assertIn(DETECTOR_SELFTEST_FAILED, notes)
+        self.assertFalse(any(n.startswith("flagged:") for n in notes))
 
     def test_a_failed_self_test_is_still_measured(self) -> None:
         self._install(lambda _command: (False, None, None))

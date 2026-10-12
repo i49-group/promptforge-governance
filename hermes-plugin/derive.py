@@ -108,6 +108,8 @@ _FLAGGED_DESCRIPTION_MAX = 80
 # Known answers the detector must give before its verdicts are used. A Hermes upgrade can keep
 # `detect_dangerous_command` importable and still change or empty its patterns; without this the
 # facet would quietly stop flagging and a policy denying `terminal.flagged` would stop denying.
+# A detector that is missing, faults, or fails these probes fails closed: every terminal command
+# counts as flagged until it works again.
 _DETECTOR_MUST_FLAG = ("rm -rf /", "git push --force origin main")
 _DETECTOR_MUST_NOT_FLAG = ("ls -la",)
 _detector_status: "weakref.WeakKeyDictionary" = weakref.WeakKeyDictionary()
@@ -399,7 +401,7 @@ def _detector_self_test(detect) -> Optional[str]:
     if status:
         logger.warning(
             "PromptForge governance: Hermes's dangerous-command detector failed its self-test (%s); "
-            "terminal.flagged will not be derived",
+            "every terminal command counts as terminal.flagged until it passes",
             status,
         )
     try:
@@ -459,6 +461,7 @@ def derive_facets(
 
     facets: List[str] = []
     notes: List[str] = []
+    failed_closed = False
 
     if selector_keys:
         selected, selector_note = _selector_facet(args, selector_keys)
@@ -482,6 +485,8 @@ def derive_facets(
         if base in FLAGGED_ACTS:
             flagged, description = _host_flag(command)
             if flagged is None:
+                facets.append(FACET_FLAGGED)
+                failed_closed = True
                 notes.append(description or DETECTOR_UNAVAILABLE)
             elif flagged:
                 facets.append(FACET_FLAGGED)
@@ -507,11 +512,13 @@ def derive_facets(
         if base == "read_file" and FACET_READ not in facets:
             facets.append(FACET_READ)
 
-    if not facets and not any(note.startswith("prose_only:") for note in notes):
+    recognised = [f for f in facets if not (failed_closed and f == FACET_FLAGGED)]
+    if not recognised and not any(note.startswith("prose_only:") for note in notes):
         # Classified as nothing. Distinct from args_unavailable: we saw the arguments and
         # recognised no facet, which may mean the pattern set has a gap. Skipped when suppression
         # already explains the absence — "unclassified" would read as a gap in the pattern set and
-        # send a reader looking for a missing pattern that is in fact present and working.
+        # send a reader looking for a missing pattern that is in fact present and working. A
+        # fail-closed flag is not recognition, so it does not hide the gap.
         notes.append("unclassified" if (command or path) else "args_unavailable")
 
     return sorted(set(facets)), notes

@@ -59,7 +59,7 @@ def main() -> int:
         print("")
         print("Mirror it into PromptForge or its check still compares against the old hash:")
         print("  cp conformance/pep-build.json \\")
-        print("     ../Promptforge/promptforge/packages/governance-pdp/conformance/pep-build.json")
+        print("     ../Promptforge/promptforge/libs/governance-conformance/pep-build.json")
     return 0
 
 

@@ -1,7 +1,7 @@
 {
   "$comment": "GENERATED — do not hand-edit. Regenerate with: pnpm build:record-pep-build",
-  "build": "d2c5f73550b8",
-  "recorded": "2026-10-01",
+  "build": "ccba4439a9d2",
+  "recorded": "2026-10-12",
   "algorithm": "sha256, updated with each module's filename then its bytes, in the order given by `modules`; first 12 hex characters of the digest",
   "modules": [
     "__init__.py",

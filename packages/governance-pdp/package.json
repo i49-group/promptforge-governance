@@ -1,6 +1,6 @@
 {
   "name": "@i49-group/governance-pdp",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Local Policy Decision Point — refresh/verify/cache signed PromptForge governance bundles and evaluate in-process",
   "license": "MIT",
   "repository": {

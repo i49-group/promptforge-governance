@@ -2,6 +2,12 @@
 
 `@i49-group/governance-pdp` and `@i49-group/plugin-hermes` share one version.
 
+## 0.2.1
+
+- **Staged releases.** Each version is staged on npm by the `publish` workflow and goes live only
+  after a maintainer approves it with 2FA. No npm token exists for either package.
+- The governance-pdp README links the public guides instead of private documents.
+
 ## 0.2.0
 
 First version published to npm.

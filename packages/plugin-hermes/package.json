@@ -1,6 +1,6 @@
 {
   "name": "@i49-group/plugin-hermes",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Hermes PEP plugin — enforce PromptForge Act policy on tool dispatch",
   "license": "MIT",
   "repository": {
@@ -40,7 +40,7 @@
     "node": ">=18.18"
   },
   "peerDependencies": {
-    "@i49-group/governance-pdp": "^0.2.0"
+    "@i49-group/governance-pdp": "^0.2.1"
   },
   "devDependencies": {
     "@i49-group/governance-pdp": "workspace:*",

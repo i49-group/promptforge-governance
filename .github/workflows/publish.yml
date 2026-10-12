@@ -1,16 +1,17 @@
 name: publish
 
-# Publishes @i49-group/governance-pdp and @i49-group/plugin-hermes to npm when a
-# `vX.Y.Z` tag is pushed. Both packages share one version.
+# Stages @i49-group/governance-pdp and @i49-group/plugin-hermes on npm when a `vX.Y.Z` tag
+# is pushed. Both packages share one version.
 #
-# Authentication is npm trusted publishing: npm checks this workflow's GitHub identity,
-# so no npm token is stored here, and every version carries a provenance statement naming
-# the commit and run it was built from (`npm audit signatures` verifies it).
+# Two people-present gates, by design:
+#   1. The `npm-publish` GitHub environment waits for a maintainer to approve the run.
+#   2. The run only *stages* each version. A maintainer approves it on npmjs.com (or with
+#      `npm stage approve`) using 2FA before it becomes installable.
 #
-# npm can only register a trusted publisher on a package that already exists. The first
-# release therefore runs with a short-lived `NPM_FIRST_PUBLISH_TOKEN` secret, so it is
-# built here and carries provenance like every later one. Delete that secret once the
-# trusted publisher is registered.
+# Authentication is npm trusted publishing: npm checks this workflow's GitHub identity and
+# environment, so no npm token is stored anywhere, and both packages disallow tokens. Every
+# version carries a provenance statement naming the commit and run it was built from
+# (`npm audit signatures` verifies it).
 
 on:
   push:
@@ -31,11 +32,13 @@ jobs:
         with:
           version: 9.15.0
 
-      # Trusted publishing needs npm 11.5.1 or later, which ships with Node 24.
+      # No dependency cache in a release build: what ships is built from a clean install.
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: pnpm
+
+      # `npm stage` needs npm 11.15.0 or later.
+      - run: npm install -g npm@^11.15.0
 
       - uses: actions/setup-python@v5
         with:
@@ -58,11 +61,14 @@ jobs:
       - name: Python Hermes evaluator agrees
         run: python3 -m unittest discover -s hermes-plugin -p 'test_*.py' -v
 
-      - name: First release only — token auth
-        env:
-          NPM_FIRST_PUBLISH_TOKEN: ${{ secrets.NPM_FIRST_PUBLISH_TOKEN }}
-        if: env.NPM_FIRST_PUBLISH_TOKEN != ''
-        run: echo "//registry.npmjs.org/:_authToken=${NPM_FIRST_PUBLISH_TOKEN}" > "$HOME/.npmrc"
-
-      - name: Publish
-        run: pnpm -r --filter './packages/*' publish --no-git-checks
+      # `pnpm pack` turns `workspace:*` into real versions; npm stages the tarball it made.
+      - name: Stage both packages
+        run: |
+          mkdir -p "$RUNNER_TEMP/release"
+          for pkg in packages/governance-pdp packages/plugin-hermes; do
+            (cd "$pkg" && pnpm pack --pack-destination "$RUNNER_TEMP/release")
+          done
+          for tarball in "$RUNNER_TEMP"/release/*.tgz; do
+            npm stage publish "$tarball" --access public --provenance
+          done
+          echo "Staged. Approve each version on npmjs.com (Staged Packages) with 2FA." >> "$GITHUB_STEP_SUMMARY"

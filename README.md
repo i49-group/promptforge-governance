@@ -210,8 +210,9 @@ pnpm typecheck
 ## Releasing
 
 Set the same version in `packages/governance-pdp` and `packages/plugin-hermes`, add a
-[CHANGELOG](CHANGELOG.md) entry, merge, then push a `vX.Y.Z` tag. The `publish` workflow runs every
-check again and publishes both packages to npm with provenance.
+[CHANGELOG](CHANGELOG.md) entry, merge, then push a `vX.Y.Z` tag. Approve the run in the `npm-publish` environment. The `publish`
+workflow runs every check again and stages both packages on npm with provenance. A maintainer then
+approves each staged version on npmjs.com with 2FA before it can be installed.
 
 ## License
 

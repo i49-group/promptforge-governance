@@ -69,8 +69,7 @@ record the right reason:
 pnpm --filter @i49-group/governance-pdp test
 ```
 
-## Specs
+## Guides
 
-- `docs/architecture/SDK-GOVERNANCE-PDP-SURFACE.md`
-- `docs/architecture/KEY_PF-GOVERNANCE-PACK-AND-BUNDLE-API.md`
-- `docs/guides/developer/governance-integration-guide.md`
+- [Implementer's guide](https://github.com/i49-group/promptforge-governance/blob/main/docs/guides/implementers-guide.md)
+- [AI governance configuration guide](https://github.com/i49-group/promptforge-governance/blob/main/docs/guides/ai-governance-configuration-guide.md)
